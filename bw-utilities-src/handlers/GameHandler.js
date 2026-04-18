@@ -19,6 +19,13 @@ class GameHandler {
     this.myTeamName = null;
   }
 
+  _t(key, params = null, fallback = null) {
+    if (typeof this.api.t === "function") {
+      return this.api.t(key, params, fallback ?? key);
+    }
+    return fallback ?? key;
+  }
+
   getTeamLetter(rawPrefix) {
     if (!rawPrefix) return null;
     const match = rawPrefix.match(/[A-Z]/);
@@ -137,16 +144,30 @@ class GameHandler {
 
       if (!lastGameMode) {
         this.api.chat(
-          `${this.api.getPrefix()} §cAuto requeue failed: Could not determine last game mode.`
+          `${this.api.getPrefix()} §c${this._t(
+            "chat.auto_requeue_game_end.no_mode",
+            null,
+            "Auto requeue failed: Could not determine last game mode."
+          )}`
         );
         return;
       }
 
       const delay = this.api.config.get("autoRequeueGameEnd.delay") || 0;
-      const triggerReason = isRewardSummary ? "Game end" : "Team eliminated";
+      const triggerReason = isRewardSummary
+        ? this._t("chat.auto_requeue_game_end.reason_game_end", null, "Game end")
+        : this._t(
+            "chat.auto_requeue_game_end.reason_team_eliminated",
+            null,
+            "Team eliminated"
+          );
 
       this.api.chat(
-        `${this.api.getPrefix()} §a${triggerReason} detected. Sending /play ${lastGameMode} in ${delay}ms...`
+        `${this.api.getPrefix()} §a${this._t(
+          "chat.auto_requeue_game_end.sending_play",
+          { reason: triggerReason, mode: lastGameMode, delay },
+          `${triggerReason} detected. Sending /play ${lastGameMode} in ${delay}ms...`
+        )}`
       );
 
       setTimeout(() => {

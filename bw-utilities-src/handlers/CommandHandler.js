@@ -35,6 +35,17 @@ class CommandHandler {
     this.shoutTimer = null;
   }
 
+  _t(key, params = null, fallback = null) {
+    if (typeof this.api.t === "function") {
+      return this.api.t(key, params, fallback ?? key);
+    }
+    return fallback ?? key;
+  }
+
+  _prefixed(key, params = null, fallback = null) {
+    return `${this.api.getPrefix()} ${this._t(key, params, fallback)}`;
+  }
+
   _getMacros() {
     try {
       if (this.fs.existsSync(this.macrosFilePath)) {
@@ -63,7 +74,11 @@ class CommandHandler {
 
     if (!name || !contentArray || contentArray.length === 0) {
       this.api.chat(
-        `${this.api.getPrefix()} §cUsage: /bwu setmacro <name> <content...>`
+        `${this.api.getPrefix()} §c${this._t(
+          "chat.command.usage.setmacro",
+          null,
+          "Usage: /bwu setmacro <name> <content...>"
+        )}`
       );
       return;
     }
@@ -75,14 +90,24 @@ class CommandHandler {
 
     this._saveMacros(macros);
     this.api.chat(
-      `${this.api.getPrefix()} §aMacro '${name}' saved with content: §f${content}`
+      `${this.api.getPrefix()} §a${this._t(
+        "chat.command.setmacro.saved",
+        { name, content },
+        `Macro '${name}' saved with content: ${content}`
+      )}`
     );
   }
 
   handleDelMacroCommand(ctx) {
     const name = ctx.args.name;
     if (!name) {
-      this.api.chat(`${this.api.getPrefix()} §cUsage: /bwu delmacro <name>`);
+      this.api.chat(
+        `${this.api.getPrefix()} §c${this._t(
+          "chat.command.usage.delmacro",
+          null,
+          "Usage: /bwu delmacro <name>"
+        )}`
+      );
       return;
     }
 
@@ -93,10 +118,20 @@ class CommandHandler {
       delete macros[nameLower];
       this._saveMacros(macros);
       this.api.chat(
-        `${this.api.getPrefix()} §aMacro '${name}' successfully removed!`
+        `${this.api.getPrefix()} §a${this._t(
+          "chat.command.delmacro.removed",
+          { name },
+          `Macro '${name}' successfully removed!`
+        )}`
       );
     } else {
-      this.api.chat(`${this.api.getPrefix()} §cMacro '${name}' not found.`);
+      this.api.chat(
+        `${this.api.getPrefix()} §c${this._t(
+          "chat.command.delmacro.not_found",
+          { name },
+          `Macro '${name}' not found.`
+        )}`
+      );
     }
   }
 
@@ -106,12 +141,22 @@ class CommandHandler {
 
     if (names.length === 0) {
       this.api.chat(
-        `${this.api.getPrefix()} §cYou have no saved macros. Use /bwu setmacro <name> <content...>`
+        `${this.api.getPrefix()} §c${this._t(
+          "chat.command.macros.none",
+          null,
+          "You have no saved macros. Use /bwu setmacro <name> <content...>"
+        )}`
       );
       return;
     }
 
-    this.api.chat(`${this.api.getPrefix()} §6Saved Macros (${names.length}):`);
+    this.api.chat(
+      `${this.api.getPrefix()} §6${this._t(
+        "chat.command.macros.header",
+        { count: names.length },
+        `Saved Macros (${names.length}):`
+      )}`
+    );
 
     for (const name of names) {
       const content = macros[name];
@@ -164,7 +209,13 @@ class CommandHandler {
   handleRunMacroCommand(ctx) {
     const name = ctx.args.name;
     if (!name) {
-      this.api.chat(`${this.api.getPrefix()} §cUsage: /bwu m <name>`);
+      this.api.chat(
+        `${this.api.getPrefix()} §c${this._t(
+          "chat.command.usage.macro_run",
+          null,
+          "Usage: /bwu m <name>"
+        )}`
+      );
       return;
     }
 
@@ -176,7 +227,11 @@ class CommandHandler {
       this.api.sendChatToServer(content);
     } else {
       this.api.chat(
-        `${this.api.getPrefix()} §cMacro '${name}' not found. Use /bwu macros to list.`
+        `${this.api.getPrefix()} §c${this._t(
+          "chat.command.macro_run.not_found",
+          { name },
+          `Macro '${name}' not found. Use /bwu macros to list.`
+        )}`
       );
     }
   }
@@ -205,7 +260,13 @@ class CommandHandler {
       typeof playerName !== "string" ||
       playerName.trim().length === 0
     ) {
-      this.api.chat(`${this.api.getPrefix()} §cUsage: /bwu stats <nickname>`);
+      this.api.chat(
+        `${this.api.getPrefix()} §c${this._t(
+          "chat.command.usage.stats",
+          null,
+          "Usage: /bwu stats <nickname>"
+        )}`
+      );
       return;
     }
 
@@ -219,23 +280,33 @@ class CommandHandler {
 
     if (Number.isNaN(numericThreshold) || numericThreshold < 0) {
       this.api.chat(
-        `${this.api.getPrefix()} §cError: Please provide a valid number for the threshold (e.g., 10.0).`
+        `${this.api.getPrefix()} §c${this._t(
+          "chat.command.setthreshold.invalid",
+          null,
+          "Error: Please provide a valid number for the threshold (e.g., 10.0)."
+        )}`
       );
       return;
     }
 
     this.api.config.set("autoRequeue.fkdrThreshold", numericThreshold);
 
-    this.api.chat(
-      `${this.api.getPrefix()} §aFKDR threshold for auto-requeue set to §f${numericThreshold.toFixed(
-        2
-      )}§a.`
-    );
+    this.api.chat(`${this.api.getPrefix()} §a${this._t(
+      "chat.command.setthreshold.updated",
+      { value: numericThreshold.toFixed(2) },
+      `FKDR threshold for auto-requeue set to ${numericThreshold.toFixed(2)}.`
+    )}`);
   }
 
   handleClearCommand(ctx) {
     this.tabManager.clearManagedPlayers("all");
-    this.api.chat(`${this.api.getPrefix()} §aStats cleared successfully!`);
+    this.api.chat(
+      `${this.api.getPrefix()} §a${this._t(
+        "chat.command.clearstats.success",
+        null,
+        "Stats cleared successfully!"
+      )}`
+    );
   }
 
   handleSetKeyCommand(ctx) {
@@ -243,7 +314,11 @@ class CommandHandler {
 
     if (!apikey || typeof apikey !== "string") {
       this.api.chat(
-        `${this.api.getPrefix()} §cError: Please provide a valid API key!`
+        `${this.api.getPrefix()} §c${this._t(
+          "chat.command.api_key.invalid",
+          null,
+          "Error: Please provide a valid API key!"
+        )}`
       );
       return;
     }
@@ -251,14 +326,22 @@ class CommandHandler {
     const trimmedKey = apikey.trim();
     if (trimmedKey.length === 0) {
       this.api.chat(
-        `${this.api.getPrefix()} §cError: The key cannot be empty!`
+        `${this.api.getPrefix()} §c${this._t(
+          "chat.command.api_key.empty",
+          null,
+          "Error: The key cannot be empty!"
+        )}`
       );
       return;
     }
 
     this.api.config.set("main.hypixelApiKey", trimmedKey);
     this.api.chat(
-      `${this.api.getPrefix()} §aHypixel API key set successfully!`
+      `${this.api.getPrefix()} §a${this._t(
+        "chat.command.api_key.hypixel_set",
+        null,
+        "Hypixel API key set successfully!"
+      )}`
     );
   }
 
@@ -267,7 +350,11 @@ class CommandHandler {
 
     if (!apikey || typeof apikey !== "string") {
       this.api.chat(
-        `${this.api.getPrefix()} §cError: Please provide a valid API key!`
+        `${this.api.getPrefix()} §c${this._t(
+          "chat.command.api_key.invalid",
+          null,
+          "Error: Please provide a valid API key!"
+        )}`
       );
       return;
     }
@@ -275,19 +362,33 @@ class CommandHandler {
     const trimmedKey = apikey.trim();
     if (trimmedKey.length === 0) {
       this.api.chat(
-        `${this.api.getPrefix()} §cError: The key cannot be empty!`
+        `${this.api.getPrefix()} §c${this._t(
+          "chat.command.api_key.empty",
+          null,
+          "Error: The key cannot be empty!"
+        )}`
       );
       return;
     }
 
     this.api.config.set("main.auroraApiKey", trimmedKey);
-    this.api.chat(`${this.api.getPrefix()} §aAurora API key set successfully!`);
+    this.api.chat(
+      `${this.api.getPrefix()} §a${this._t(
+        "chat.command.api_key.aurora_set",
+        null,
+        "Aurora API key set successfully!"
+      )}`
+    );
   }
 
   sendQdMessage(slot) {
     if (!slot || slot < 1 || slot > 5) {
       this.api.chat(
-        `${this.api.getPrefix()} §cInvalid slot. Use a number from 1 to 5.`
+        `${this.api.getPrefix()} §c${this._t(
+          "chat.command.slot.invalid",
+          null,
+          "Invalid slot. Use a number from 1 to 5."
+        )}`
       );
       return;
     }
@@ -295,7 +396,11 @@ class CommandHandler {
     const message = this.api.config.get(`autoQdmsg.msg${slot}`);
     if (!message || message.trim().length === 0) {
       this.api.chat(
-        `${this.api.getPrefix()} §cSlot ${slot} is empty. Use /bwu setqdmsg ${slot} <message> to save.`
+        `${this.api.getPrefix()} §c${this._t(
+          "chat.command.qdmsg.slot_empty",
+          { slot },
+          `Slot ${slot} is empty. Use /bwu setqdmsg ${slot} <message> to save.`
+        )}`
       );
       return;
     }
@@ -307,7 +412,11 @@ class CommandHandler {
     const slot = Number.parseInt(ctx.args.slot, 10);
     if (Number.isNaN(slot)) {
       this.api.chat(
-        `${this.api.getPrefix()} §cUsage: /bwu qdmsg <slot_number: 1-5>`
+        `${this.api.getPrefix()} §c${this._t(
+          "chat.command.usage.qdmsg",
+          null,
+          "Usage: /bwu qdmsg <slot_number: 1-5>"
+        )}`
       );
       return;
     }
@@ -320,7 +429,11 @@ class CommandHandler {
 
     if (Number.isNaN(slot) || slot < 1 || slot > 5) {
       this.api.chat(
-        `${this.api.getPrefix()} §cUsage: /bwu setqdmsg <slot: 1-5> <message>`
+        `${this.api.getPrefix()} §c${this._t(
+          "chat.command.usage.setqdmsg",
+          null,
+          "Usage: /bwu setqdmsg <slot: 1-5> <message>"
+        )}`
       );
       return;
     }
@@ -333,19 +446,33 @@ class CommandHandler {
     if (finalMessage.length === 0) {
       this.api.config.set(`autoQdmsg.msg${slot}`, "");
       this.api.chat(
-        `${this.api.getPrefix()} §aMessage from Slot ${slot} has been cleared.`
+        `${this.api.getPrefix()} §a${this._t(
+          "chat.command.slot.cleared",
+          { slot },
+          `Message from Slot ${slot} has been cleared.`
+        )}`
       );
       return;
     }
 
     this.api.config.set(`autoQdmsg.msg${slot}`, finalMessage);
     this.api.chat(
-      `${this.api.getPrefix()} §aSlot ${slot} saved: §f${finalMessage}`
+      `${this.api.getPrefix()} §a${this._t(
+        "chat.command.slot.saved",
+        { slot, message: finalMessage },
+        `Slot ${slot} saved: ${finalMessage}`
+      )}`
     );
   }
 
   handleListQdmsgCommand(_ctx) {
-    this.api.chat(`${this.api.getPrefix()} §6Saved Messages (Queue Dodge):`);
+    this.api.chat(
+      `${this.api.getPrefix()} §6${this._t(
+        "chat.command.qdmsg.header",
+        null,
+        "Saved Messages (Queue Dodge):"
+      )}`
+    );
     let hasMessages = false;
     for (let i = 1; i <= 5; i++) {
       const msg = this.api.config.get(`autoQdmsg.msg${i}`);
@@ -386,14 +513,24 @@ class CommandHandler {
       }
     }
     if (!hasMessages) {
-      this.api.chat(`§cNo saved messages. Use /bwu setqdmsg <1-5> <message>`);
+      this.api.chat(
+        `§c${this._t(
+          "chat.command.qdmsg.none",
+          null,
+          "No saved messages. Use /bwu setqdmsg <1-5> <message>"
+        )}`
+      );
     }
   }
 
   sendSnipedMessage(slot, channel) {
     if (!slot || slot < 1 || slot > 5) {
       this.api.chat(
-        `${this.api.getPrefix()} §cInvalid slot. Use a number from 1 to 5.`
+        `${this.api.getPrefix()} §c${this._t(
+          "chat.command.slot.invalid",
+          null,
+          "Invalid slot. Use a number from 1 to 5."
+        )}`
       );
       return;
     }
@@ -401,7 +538,11 @@ class CommandHandler {
     const message = this.api.config.get(`snipedMsg.msg${slot}`);
     if (!message || message.trim().length === 0) {
       this.api.chat(
-        `${this.api.getPrefix()} §cSlot ${slot} is empty. Use /bwu setsniped ${slot} <message> to save.`
+        `${this.api.getPrefix()} §c${this._t(
+          "chat.command.sniped.slot_empty",
+          { slot },
+          `Slot ${slot} is empty. Use /bwu setsniped ${slot} <message> to save.`
+        )}`
       );
       return;
     }
@@ -475,7 +616,11 @@ class CommandHandler {
 
     if (Number.isNaN(slot)) {
       this.api.chat(
-        `${this.api.getPrefix()} §cUsage: /bwu sniped <slot_number: 1-5> [ac]`
+        `${this.api.getPrefix()} §c${this._t(
+          "chat.command.usage.sniped",
+          null,
+          "Usage: /bwu sniped <slot_number: 1-5> [ac]"
+        )}`
       );
       return;
     }
@@ -488,7 +633,11 @@ class CommandHandler {
 
     if (Number.isNaN(slot) || slot < 1 || slot > 5) {
       this.api.chat(
-        `${this.api.getPrefix()} §cUsage: /bwu setsniped <slot: 1-5> <message>`
+        `${this.api.getPrefix()} §c${this._t(
+          "chat.command.usage.setsniped",
+          null,
+          "Usage: /bwu setsniped <slot: 1-5> <message>"
+        )}`
       );
       return;
     }
@@ -501,19 +650,33 @@ class CommandHandler {
     if (finalMessage.length === 0) {
       this.api.config.set(`snipedMsg.msg${slot}`, "");
       this.api.chat(
-        `${this.api.getPrefix()} §aMessage from Slot ${slot} has been cleared.`
+        `${this.api.getPrefix()} §a${this._t(
+          "chat.command.slot.cleared",
+          { slot },
+          `Message from Slot ${slot} has been cleared.`
+        )}`
       );
       return;
     }
 
     this.api.config.set(`snipedMsg.msg${slot}`, finalMessage);
     this.api.chat(
-      `${this.api.getPrefix()} §aSlot ${slot} saved: §f${finalMessage}`
+      `${this.api.getPrefix()} §a${this._t(
+        "chat.command.slot.saved",
+        { slot, message: finalMessage },
+        `Slot ${slot} saved: ${finalMessage}`
+      )}`
     );
   }
 
   handleListSnipedCommand(_ctx) {
-    this.api.chat(`${this.api.getPrefix()} §6Saved Messages (Sniped):`);
+    this.api.chat(
+      `${this.api.getPrefix()} §6${this._t(
+        "chat.command.sniped.header",
+        null,
+        "Saved Messages (Sniped):"
+      )}`
+    );
     let hasMessages = false;
     for (let i = 1; i <= 5; i++) {
       const msg = this.api.config.get(`snipedMsg.msg${i}`);
@@ -554,7 +717,13 @@ class CommandHandler {
       }
     }
     if (!hasMessages) {
-      this.api.chat(`§cNo saved messages. Use /bwu setsniped <1-5> <message>`);
+      this.api.chat(
+        `§c${this._t(
+          "chat.command.sniped.none",
+          null,
+          "No saved messages. Use /bwu setsniped <1-5> <message>"
+        )}`
+      );
     }
   }
 
@@ -593,13 +762,23 @@ class CommandHandler {
     const playerName = ctx.args.ign;
 
     if (!playerName || typeof playerName !== "string") {
-      this.api.chat(`${this.api.getPrefix()} §cUsage: /bwu mcnames <ign>`);
+      this.api.chat(
+        `${this.api.getPrefix()} §c${this._t(
+          "chat.command.usage.mcnames",
+          null,
+          "Usage: /bwu mcnames <ign>"
+        )}`
+      );
       return;
     }
 
     try {
       this.api.chat(
-        `${this.api.getPrefix()} §7Fetching name history for §b${playerName}§7...`
+        `${this.api.getPrefix()} §7${this._t(
+          "chat.command.mcnames.fetching",
+          { player: playerName },
+          `Fetching name history for ${playerName}...`
+        )}`
       );
 
       const nameData = await this.apiService.getNameHistory(playerName);
@@ -612,15 +791,21 @@ class CommandHandler {
       }
 
       this.api.chat(
-        `${this.api.getPrefix()} §aCurrent name: §f${nameData.currentName}`
+        `${this.api.getPrefix()} §a${this._t(
+          "chat.command.mcnames.current_name",
+          { name: nameData.currentName },
+          `Current name: ${nameData.currentName}`
+        )}`
       );
       this.api.chat(`${this.api.getPrefix()} §7UUID: §f${nameData.uuid}`);
 
       if (nameData.history.length > 0) {
         this.api.chat(
-          `${this.api.getPrefix()} §6Name History §7(${
-            nameData.history.length
-          } names):`
+          `${this.api.getPrefix()} §6${this._t(
+            "chat.command.mcnames.history_header",
+            { count: nameData.history.length },
+            `Name History (${nameData.history.length} names):`
+          )}`
         );
 
         nameData.history.forEach((entry, index) => {
@@ -651,7 +836,13 @@ class CommandHandler {
           );
         });
       } else {
-        this.api.chat(`${this.api.getPrefix()} §7No name history found.`);
+        this.api.chat(
+          `${this.api.getPrefix()} §7${this._t(
+            "chat.command.mcnames.no_history",
+            null,
+            "No name history found."
+          )}`
+        );
       }
     } catch (e) {
       this.api.chat(
@@ -668,7 +859,11 @@ class CommandHandler {
 
     if (!value) {
       this.api.chat(
-        `${this.api.getPrefix()} §cUsage: /bwu setinparty <true|false>`
+        `${this.api.getPrefix()} §c${this._t(
+          "chat.command.usage.setinparty",
+          null,
+          "Usage: /bwu setinparty <true|false>"
+        )}`
       );
       return;
     }
@@ -687,14 +882,22 @@ class CommandHandler {
       );
     } else {
       this.api.chat(
-        `${this.api.getPrefix()} §cInvalid value. Use §ftrue §cor §ffalse§c.`
+        `${this.api.getPrefix()} §c${this._t(
+          "chat.command.setinparty.invalid",
+          null,
+          "Invalid value. Use true or false."
+        )}`
       );
     }
   }
   async handleRerankCommand(ctx) {
     try {
       this.api.chat(
-        `${this.api.getPrefix()} §eRefreshing team ranking and tab list...`
+        `${this.api.getPrefix()} §e${this._t(
+          "chat.command.rerank.refreshing",
+          null,
+          "Refreshing team ranking and tab list..."
+        )}`
       );
 
       // Clear existing tab stats
@@ -708,7 +911,11 @@ class CommandHandler {
       this.api.sendChatToServer("/who");
     } catch (error) {
       this.api.chat(
-        `${this.api.getPrefix()} §cError during rerank: ${error.message}`
+        `${this.api.getPrefix()} §c${this._t(
+          "chat.command.rerank.error",
+          { error: error.message },
+          `Error during rerank: ${error.message}`
+        )}`
       );
       console.error(`[BWU] Rerank error: ${error.stack}`);
     }
@@ -720,7 +927,11 @@ class CommandHandler {
       // Validate sendTo argument
       if (!["private", "team", "party"].includes(sendTo)) {
         this.api.chat(
-          `${this.api.getPrefix()} §cInvalid sendTo option! Use: private, team, or party`
+          `${this.api.getPrefix()} §c${this._t(
+            "chat.command.allstats.invalid_send_to",
+            null,
+            "Invalid sendTo option! Use: private, team, or party"
+          )}`
         );
         return;
       }
@@ -728,7 +939,11 @@ class CommandHandler {
       // Check if we're in a party when sendTo is party
       if (sendTo === "party" && this.bwu.inParty !== true) {
         this.api.chat(
-          `${this.api.getPrefix()} §cYou must be in a party to send to party chat!`
+          `${this.api.getPrefix()} §c${this._t(
+            "chat.command.allstats.must_be_in_party",
+            null,
+            "You must be in a party to send to party chat!"
+          )}`
         );
         return;
       }
@@ -762,7 +977,11 @@ class CommandHandler {
       
       if (managedPlayers.length === 0) {
         this.api.chat(
-          `${this.api.getPrefix()} §cNo players tracked. Try running §f/who §cor wait for a game to start!`
+          `${this.api.getPrefix()} §c${this._t(
+            "chat.command.allstats.no_players",
+            null,
+            "No players tracked. Try running /who or wait for a game to start!"
+          )}`
         );
         return;
       }
@@ -775,7 +994,11 @@ class CommandHandler {
         
         if (!teamLetter) {
           this.api.chat(
-            `${this.api.getPrefix()} §cInvalid color! Valid colors: red, blue, green, yellow, aqua, white, pink, gray`
+            `${this.api.getPrefix()} §c${this._t(
+              "chat.command.allstats.invalid_color",
+              null,
+              "Invalid color! Valid colors: red, blue, green, yellow, aqua, white, pink, gray"
+            )}`
           );
           return;
         }
@@ -792,21 +1015,33 @@ class CommandHandler {
 
         if (playersToShow.length === 0) {
           this.api.chat(
-            `${this.api.getPrefix()} §cNo players found on ${teamNames[teamLetter]} team!`
+            `${this.api.getPrefix()} §c${this._t(
+              "chat.command.allstats.no_players_on_team",
+              { team: teamNames[teamLetter] },
+              `No players found on ${teamNames[teamLetter]} team!`
+            )}`
           );
           return;
         }
 
         const modeText = sendTo === "private" ? "privately" : sendTo === "team" ? "in team chat" : "in party chat";
         this.api.chat(
-          `${this.api.getPrefix()} §eShowing stats for §f${playersToShow.length} §eplayers on §f${teamNames[teamLetter]} §eteam ${modeText}...`
+          `${this.api.getPrefix()} §e${this._t(
+            "chat.command.allstats.showing_team",
+            { count: playersToShow.length, team: teamNames[teamLetter], mode: modeText },
+            `Showing stats for ${playersToShow.length} players on ${teamNames[teamLetter]} team ${modeText}...`
+          )}`
         );
       } else {
         // Show all players
         playersToShow = managedPlayers;
         const modeText = sendTo === "private" ? "privately" : sendTo === "team" ? "in team chat" : "in party chat";
         this.api.chat(
-          `${this.api.getPrefix()} §eShowing stats for §f${playersToShow.length} §eplayers ${modeText}...`
+          `${this.api.getPrefix()} §e${this._t(
+            "chat.command.allstats.showing_all",
+            { count: playersToShow.length, mode: modeText },
+            `Showing stats for ${playersToShow.length} players ${modeText}...`
+          )}`
         );
       }
 
@@ -853,7 +1088,11 @@ class CommandHandler {
       }
     } catch (error) {
       this.api.chat(
-        `${this.api.getPrefix()} §cError showing stats: ${error.message}`
+        `${this.api.getPrefix()} §c${this._t(
+          "chat.command.allstats.error",
+          { error: error.message },
+          `Error showing stats: ${error.message}`
+        )}`
       );
       console.error(`[BWU] AllStats error: ${error.stack}`);
     }
@@ -872,7 +1111,11 @@ class CommandHandler {
     const playerName = ctx.args.player;
     if (!playerName) {
       this.api.chat(
-        `${this.api.getPrefix()} §cUsage: /bwu playerstats <player>`
+        `${this.api.getPrefix()} §c${this._t(
+          "chat.command.usage.playerstats",
+          null,
+          "Usage: /bwu playerstats <player>"
+        )}`
       );
       return;
     }
@@ -892,21 +1135,39 @@ class CommandHandler {
       const showFK = this.api.config.get("inGameTracker.tabShowFinalKills");
       const showBB = this.api.config.get("inGameTracker.tabShowBedBreaks");
 
-      this.api.chat(`${this.api.getPrefix()} §6§l═══ Game Tab Settings ═══`);
+      this.api.chat(
+        `${this.api.getPrefix()} §6§l═══ ${this._t(
+          "chat.command.gametab.header",
+          null,
+          "Game Tab Settings"
+        )} ═══`
+      );
       this.api.chat(`  §7Show In Tab: ${showInTab ? "§aON" : "§cOFF"}`);
       this.api.chat(`  §7Delay: §e${delay}s`);
       this.api.chat(`  §7Show Kills: ${showKills ? "§aON" : "§cOFF"}`);
       this.api.chat(`  §7Show Deaths: ${showDeaths ? "§aON" : "§cOFF"}`);
       this.api.chat(`  §7Show Final Kills: ${showFK ? "§aON" : "§cOFF"}`);
       this.api.chat(`  §7Show Bed Breaks: ${showBB ? "§aON" : "§cOFF"}`);
-      this.api.chat(`  §8Usage: /bwu gametab <on|off|kills|deaths|fk|bb|delay> [value]`);
+      this.api.chat(
+        `  §8${this._t(
+          "chat.command.usage.gametab",
+          null,
+          "Usage: /bwu gametab <on|off|kills|deaths|fk|bb|delay> [value]"
+        )}`
+      );
       return;
     }
 
     switch (setting) {
       case "on":
         this.api.config.set("inGameTracker.showInTab", true);
-        this.api.chat(`${this.api.getPrefix()} §aGame stats in tab enabled!`);
+        this.api.chat(
+          `${this.api.getPrefix()} §a${this._t(
+            "chat.command.gametab.enabled",
+            null,
+            "Game stats in tab enabled!"
+          )}`
+        );
         // Start alternation if game is in progress
         if (this.bwu.inGameTracker.isTracking) {
           this.bwu.tabManager.startTabAlternation();
@@ -915,7 +1176,13 @@ class CommandHandler {
 
       case "off":
         this.api.config.set("inGameTracker.showInTab", false);
-        this.api.chat(`${this.api.getPrefix()} §cGame stats in tab disabled!`);
+        this.api.chat(
+          `${this.api.getPrefix()} §c${this._t(
+            "chat.command.gametab.disabled",
+            null,
+            "Game stats in tab disabled!"
+          )}`
+        );
         this.bwu.tabManager.stopTabAlternation();
         break;
 
@@ -946,7 +1213,13 @@ class CommandHandler {
       case "delay":
         const delayVal = parseInt(value);
         if (isNaN(delayVal) || delayVal < 5 || delayVal > 10) {
-          this.api.chat(`${this.api.getPrefix()} §cDelay must be between 5 and 10 seconds.`);
+          this.api.chat(
+            `${this.api.getPrefix()} §c${this._t(
+              "chat.command.gametab.delay_invalid",
+              null,
+              "Delay must be between 5 and 10 seconds."
+            )}`
+          );
           return;
         }
         this.api.config.set("inGameTracker.tabDelay", delayVal);
@@ -959,8 +1232,20 @@ class CommandHandler {
         break;
 
       default:
-        this.api.chat(`${this.api.getPrefix()} §cUnknown setting: ${setting}`);
-        this.api.chat(`${this.api.getPrefix()} §7Usage: /bwu gametab <on|off|kills|deaths|fk|bb|delay> [value]`);
+        this.api.chat(
+          `${this.api.getPrefix()} §c${this._t(
+            "chat.command.gametab.unknown_setting",
+            { setting },
+            `Unknown setting: ${setting}`
+          )}`
+        );
+        this.api.chat(
+          `${this.api.getPrefix()} §7${this._t(
+            "chat.command.usage.gametab",
+            null,
+            "Usage: /bwu gametab <on|off|kills|deaths|fk|bb|delay> [value]"
+          )}`
+        );
     }
   }
 }

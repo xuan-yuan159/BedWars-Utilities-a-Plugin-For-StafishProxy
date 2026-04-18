@@ -152,6 +152,13 @@ class InGameTracker {
       mutualFinalKill: new RegExp(`^${P} fought to the edge with ${P}\\. FINAL KILL!$`),
     };
   }
+
+  _t(key, params = null, fallback = null) {
+    if (typeof this.api.t === "function") {
+      return this.api.t(key, params, fallback ?? key);
+    }
+    return fallback ?? key;
+  }
     /**
    * Start tracking when game begins
    * @param {Set<string>} playerNames - Set of player names in the game
@@ -239,7 +246,13 @@ class InGameTracker {
       }
       
       this.writeToLog("=".repeat(80));
-      this.api.chat(`${this.api.getPrefix()} §aGame log saved to: ${path.basename(this.logFilePath)}`);
+      this.api.chat(
+        `${this.api.getPrefix()} §a${this._t(
+          "chat.in_game_tracker.log_saved",
+          { file: path.basename(this.logFilePath) },
+          `Game log saved to: ${path.basename(this.logFilePath)}`
+        )}`
+      );
     }
     
     this.api.debugLog(`[BWU InGameTracker] Stopped tracking`);
@@ -522,13 +535,37 @@ class InGameTracker {
     let message = "";
     switch (type) {
       case "bed":
-        message = `§e${player} §7broke §c${target} §7bed! §8(§e${stats.bedsBroken} §7total§8)`;
+        message = `§e${player} §7${this._t(
+          "chat.in_game_tracker.event_bed_break",
+          { target },
+          `broke ${target} bed!`
+        )} §8(§e${stats.bedsBroken} §7${this._t(
+          "chat.in_game_tracker.total_short",
+          null,
+          "total"
+        )}§8)`;
         break;
       case "finalKill":
-        message = `§e${player} §7final killed §c${target}§7! §8(§e${stats.finalKills} §7FK total§8)`;
+        message = `§e${player} §7${this._t(
+          "chat.in_game_tracker.event_final_kill",
+          { target },
+          `final killed ${target}!`
+        )} §8(§e${stats.finalKills} §7FK ${this._t(
+          "chat.in_game_tracker.total_short",
+          null,
+          "total"
+        )}§8)`;
         break;
       case "kill":
-        message = `§e${player} §7killed §c${target}§7! §8(§e${stats.kills} §7kills total§8)`;
+        message = `§e${player} §7${this._t(
+          "chat.in_game_tracker.event_kill",
+          { target },
+          `killed ${target}!`
+        )} §8(§e${stats.kills} §7${this._t(
+          "chat.in_game_tracker.label_kills",
+          null,
+          "Kills"
+        )} ${this._t("chat.in_game_tracker.total_short", null, "total")}§8)`;
         break;
     }
     
@@ -559,66 +596,181 @@ class InGameTracker {
    */
   displayGameStats() {
     if (!this.isTracking) {
-      this.api.chat(`${this.api.getPrefix()} §cNo game in progress to track.`);
+      this.api.chat(
+        `${this.api.getPrefix()} §c${this._t(
+          "chat.in_game_tracker.no_game",
+          null,
+          "No game in progress to track."
+        )}`
+      );
       return;
     }
-    
+
     const allStats = this.getAllStats();
-    
+
     // Sort by most impactful players (final kills + bed breaks)
     allStats.sort((a, b) => {
       const scoreA = a.finalKills * 2 + a.bedsBroken * 3 + a.kills;
       const scoreB = b.finalKills * 2 + b.bedsBroken * 3 + b.kills;
       return scoreB - scoreA;
     });
-      this.api.chat(`${this.api.getPrefix()} §6§l═══ In-Game Stats ═══`);
-    
+
+    this.api.chat(
+      `${this.api.getPrefix()} §6§l═══ ${this._t(
+        "chat.in_game_tracker.header",
+        null,
+        "In-Game Stats"
+      )} ═══`
+    );
+
     // Show top performers
     const topPlayers = allStats.slice(0, 5);
     for (const player of topPlayers) {
       // Skip players with no activity at all
-      if (player.finalKills === 0 && player.kills === 0 && player.bedsBroken === 0 && player.deaths === 0) continue;
-      
+      if (
+        player.finalKills === 0 &&
+        player.kills === 0 &&
+        player.bedsBroken === 0 &&
+        player.deaths === 0
+      ) {
+        continue;
+      }
+
       const parts = [];
-      if (player.bedsBroken > 0) parts.push(`§c${player.bedsBroken} §7beds`);
-      if (player.finalKills > 0) parts.push(`§e${player.finalKills} §7FK`);
-      if (player.kills > 0) parts.push(`§a${player.kills} §7K`);
-      if (player.deaths > 0) parts.push(`§8${player.deaths} §7D`);
-      
+      if (player.bedsBroken > 0) {
+        parts.push(
+          `§c${player.bedsBroken} §7${this._t(
+            "chat.in_game_tracker.label_beds_broken",
+            null,
+            "Beds Broken"
+          )}`
+        );
+      }
+      if (player.finalKills > 0) {
+        parts.push(
+          `§e${player.finalKills} §7${this._t(
+            "chat.in_game_tracker.label_final_kills",
+            null,
+            "Final Kills"
+          )}`
+        );
+      }
+      if (player.kills > 0) {
+        parts.push(
+          `§a${player.kills} §7${this._t(
+            "chat.in_game_tracker.label_kills",
+            null,
+            "Kills"
+          )}`
+        );
+      }
+      if (player.deaths > 0) {
+        parts.push(
+          `§8${player.deaths} §7${this._t(
+            "chat.in_game_tracker.label_deaths",
+            null,
+            "Deaths"
+          )}`
+        );
+      }
+
       const statsText = parts.join(" §8| ");
       this.api.chat(`  §b${player.name}§7: ${statsText}`);
     }
-    
-    if (topPlayers.length === 0 || topPlayers.every(p => p.finalKills === 0 && p.kills === 0 && p.bedsBroken === 0 && p.deaths === 0)) {
-      this.api.chat(`  §7No events tracked yet...`);
+
+    if (
+      topPlayers.length === 0 ||
+      topPlayers.every(
+        (player) =>
+          player.finalKills === 0 &&
+          player.kills === 0 &&
+          player.bedsBroken === 0 &&
+          player.deaths === 0
+      )
+    ) {
+      this.api.chat(
+        `  §7${this._t(
+          "chat.in_game_tracker.no_events",
+          null,
+          "No events tracked yet..."
+        )}`
+      );
     }
   }
-  
+
   /**
    * Display stats for a specific player
    */
   displayPlayerStats(playerName) {
     if (!this.isTracking) {
-      this.api.chat(`${this.api.getPrefix()} §cNo game in progress to track.`);
+      this.api.chat(
+        `${this.api.getPrefix()} §c${this._t(
+          "chat.in_game_tracker.no_game",
+          null,
+          "No game in progress to track."
+        )}`
+      );
       return;
     }
-    
+
     const stats = this.playerStats.get(playerName);
     if (!stats) {
-      this.api.chat(`${this.api.getPrefix()} §c${playerName} is not in this game.`);
+      this.api.chat(
+        `${this.api.getPrefix()} §c${this._t(
+          "chat.in_game_tracker.player_not_found",
+          { player: playerName },
+          `${playerName} is not in this game.`
+        )}`
+      );
       return;
     }
-    
-    this.api.chat(`${this.api.getPrefix()} §6Stats for §b${playerName}§6:`);
-    this.api.chat(`  §cBeds Broken: §e${stats.bedsBroken}`);
-    this.api.chat(`  §aKills: §e${stats.kills}`);
-    this.api.chat(`  §7Deaths: §e${stats.deaths}`);
-    this.api.chat(`  §6Final Kills: §e${stats.finalKills}`);
-    
+
+    this.api.chat(
+      `${this.api.getPrefix()} §6${this._t(
+        "chat.in_game_tracker.player_stats_header",
+        { player: playerName },
+        `Stats for ${playerName}:`
+      )}`
+    );
+    this.api.chat(
+      `  §c${this._t(
+        "chat.in_game_tracker.label_beds_broken",
+        null,
+        "Beds Broken"
+      )}: §e${stats.bedsBroken}`
+    );
+    this.api.chat(
+      `  §a${this._t(
+        "chat.in_game_tracker.label_kills",
+        null,
+        "Kills"
+      )}: §e${stats.kills}`
+    );
+    this.api.chat(
+      `  §7${this._t(
+        "chat.in_game_tracker.label_deaths",
+        null,
+        "Deaths"
+      )}: §e${stats.deaths}`
+    );
+    this.api.chat(
+      `  §6${this._t(
+        "chat.in_game_tracker.label_final_kills",
+        null,
+        "Final Kills"
+      )}: §e${stats.finalKills}`
+    );
+
     // Calculate KDR
-    const kdr = stats.deaths > 0 ? (stats.kills / stats.deaths).toFixed(2) : stats.kills.toFixed(2);
-    const fkdr = stats.deaths > 0 ? (stats.finalKills / stats.deaths).toFixed(2) : stats.finalKills.toFixed(2);
-    
+    const kdr =
+      stats.deaths > 0
+        ? (stats.kills / stats.deaths).toFixed(2)
+        : stats.kills.toFixed(2);
+    const fkdr =
+      stats.deaths > 0
+        ? (stats.finalKills / stats.deaths).toFixed(2)
+        : stats.finalKills.toFixed(2);
+
     this.api.chat(`  §bK/D: §e${kdr} §8| §bFK/D: §e${fkdr}`);
   }
 }

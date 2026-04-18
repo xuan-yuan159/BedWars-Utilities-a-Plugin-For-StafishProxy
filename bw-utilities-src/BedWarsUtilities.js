@@ -57,6 +57,13 @@ class BedWarsUtilities {  constructor(api) {
     this.inParty = null; // null = unknown, true/false = known (detected from chat)
   }
 
+  _t(key, params = null, fallback = null) {
+    if (typeof this.api.t === "function") {
+      return this.api.t(key, params, fallback ?? key);
+    }
+    return fallback ?? key;
+  }
+
   _getDenickerInstance() {
     try {
       return this.api.getPluginInstance("denicker");
@@ -192,26 +199,46 @@ class BedWarsUtilities {  constructor(api) {
             // There's a queued message
             const secondsLeft = Math.round(remainingCooldown / 1000);
             this.api.chat(
-              `${this.api.getPrefix()} §eQueued message: §f"${this.commandHandler.pendingShoutMessage}"`
+              `${this.api.getPrefix()} §e${this._t(
+                "chat.shout.queued_message",
+                { message: this.commandHandler.pendingShoutMessage },
+                `Queued message: "${this.commandHandler.pendingShoutMessage}"`
+              )}`
             );
             this.api.chat(
-              `${this.api.getPrefix()} §eWill send in §f${secondsLeft}s`
+              `${this.api.getPrefix()} §e${this._t(
+                "chat.shout.will_send_in",
+                { seconds: secondsLeft },
+                `Will send in ${secondsLeft}s`
+              )}`
             );
           } else if (timeSinceLastShout >= this.commandHandler.shoutCooldown) {
             this.api.chat(
-              `${this.api.getPrefix()} §aShout is ready! You can shout now.`
+              `${this.api.getPrefix()} §a${this._t(
+                "chat.shout.ready",
+                null,
+                "Shout is ready! You can shout now."
+              )}`
             );
           } else {
             const secondsLeft = Math.round(remainingCooldown / 1000);
             this.api.chat(
-              `${this.api.getPrefix()} §eShout cooldown: §f${secondsLeft}s §eremaining`
+              `${this.api.getPrefix()} §e${this._t(
+                "chat.shout.cooldown",
+                { seconds: secondsLeft },
+                `Shout cooldown: ${secondsLeft}s remaining`
+              )}`
             );
           }
         }else if (shoutMessage.toLowerCase() === "cancel") {
           const wasCancelled = this.commandHandler.cancelPendingShout();
           if (wasCancelled) {
             this.api.chat(
-              `${this.api.getPrefix()} §aQueued shout cancelled successfully!`
+              `${this.api.getPrefix()} §a${this._t(
+                "chat.shout.cancelled",
+                null,
+                "Queued shout cancelled successfully!"
+              )}`
             );
           } else {
             // No queued shout, so actually shout "cancel" as a message
@@ -250,7 +277,11 @@ class BedWarsUtilities {  constructor(api) {
       if (result.isValid) {
         this.api.sendTitle(
           "§6BW Utilities",
-          "§aHypixel API key is functional!",
+          `§a${this._t(
+            "chat.api_key.valid_title",
+            null,
+            "Hypixel API key is functional!"
+          )}`,
           fadeIn,
           stay,
           fadeOut
@@ -258,7 +289,11 @@ class BedWarsUtilities {  constructor(api) {
       } else {
         this.api.sendTitle(
           "§6BW Utilities",
-          "§cHypixel API key is not functional! Please set a valid key",
+          `§c${this._t(
+            "chat.api_key.invalid_title",
+            null,
+            "Hypixel API key is not functional! Please set a valid key"
+          )}`,
           fadeIn,
           stay,
           fadeOut
@@ -311,7 +346,11 @@ class BedWarsUtilities {  constructor(api) {
           this.autoStatsMode = false;
           this.checkedPlayersInAutoMode.clear();
           this.api.chat(
-            `${this.api.getPrefix()} §cAutomatic stats mode DISABLED.`
+            `${this.api.getPrefix()} §c${this._t(
+              "chat.auto_stats.disabled",
+              null,
+              "Automatic stats mode DISABLED."
+            )}`
           );
         }
         this.tabManager.clearManagedPlayers("all");
@@ -394,7 +433,13 @@ class BedWarsUtilities {  constructor(api) {
     if (this.autoStatsMode) {
       this.autoStatsMode = false;
       this.checkedPlayersInAutoMode.clear();
-      this.api.chat(`${this.api.getPrefix()} §cAutomatic stats mode DISABLED.`);
+      this.api.chat(
+        `${this.api.getPrefix()} §c${this._t(
+          "chat.auto_stats.disabled",
+          null,
+          "Automatic stats mode DISABLED."
+        )}`
+      );
     }
   }async processPlayerData(originalPlayerNames, resolvedPlayerNames) {
     // Only run team ranking if we're in a game (not in lobby)

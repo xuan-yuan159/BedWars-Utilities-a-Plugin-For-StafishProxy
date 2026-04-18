@@ -7,6 +7,13 @@ class ChatHandler {
     this.bwuInstance = bwuInstance;
   }
 
+  _t(key, params = null, fallback = null) {
+    if (typeof this.api.t === "function") {
+      return this.api.t(key, params, fallback ?? key);
+    }
+    return fallback ?? key;
+  }
+
   async handleChat(
     cleanMessage,
     autoStatsMode,
@@ -31,8 +38,15 @@ class ChatHandler {
         } else {
           this.api.debugLog(`[BWU] Auto Stats sendType: ${sendType}`);
         }
-        let modeText = sendType === "party" ? "Party Mode" : "Private Mode";
-        const enabledMsg = `${this.api.getPrefix()} §aAutomatic stats mode ENABLED (§b${modeText}§a)`;
+        let modeText =
+          sendType === "party"
+            ? this._t("chat.auto_stats.party_mode", null, "Party Mode")
+            : this._t("chat.auto_stats.private_mode", null, "Private Mode");
+        const enabledMsg = `${this.api.getPrefix()} §a${this._t(
+          "chat.auto_stats.enabled",
+          { mode: modeText },
+          `Automatic stats mode ENABLED (${modeText})`
+        )}`;
         this.api.chat(enabledMsg);
         return;
       }
@@ -62,9 +76,17 @@ class ChatHandler {
           this.bwuInstance.requeueTriggered = true;
 
           this.api.chat(
-            `${this.api.getPrefix()} §cAuto Requeue: ${senderName} have ${stats.fkdr.toFixed(
-              2
-            )} FKDR (limit: ${autoRequeueConfig.fkdrThreshold}).`
+            `${this.api.getPrefix()} §c${this._t(
+              "chat.auto_requeue.triggered",
+              {
+                player: senderName,
+                fkdr: stats.fkdr.toFixed(2),
+                threshold: autoRequeueConfig.fkdrThreshold,
+              },
+              `Auto Requeue: ${senderName} has ${stats.fkdr.toFixed(
+                2
+              )} FKDR (limit: ${autoRequeueConfig.fkdrThreshold}).`
+            )}`
           );
 
           this.api.sendChatToServer("/requeue");
@@ -84,10 +106,16 @@ class ChatHandler {
 
     if (!stats) {
       this.api.chat(
-        `${this.api.getPrefix()} §cFailed to fetch stats for ${playerName}.`
+        `${this.api.getPrefix()} §c${this._t(
+          "chat.stats.fetch_failed",
+          { player: playerName },
+          `Failed to fetch stats for ${playerName}.`
+        )}`
       );
       return;
-    }    let ping = null;
+    }
+
+    let ping = null;
     if (this.api.config.get("stats.showPing")) {
       const uuid = await this.apiService.getUuid(playerName);
       if (uuid) {

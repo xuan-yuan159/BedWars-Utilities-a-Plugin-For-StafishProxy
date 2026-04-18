@@ -1,163 +1,186 @@
-# 🧩 BedWars Utilities — A Plugin for [Starfish Proxy](https://github.com/UrchinAPI/Starfish-Proxy)
+# BedWars Utilities（Starfish Proxy 插件）
 
-**Tired of checking BedWars stats manually?**  
-**BedWars Utilities** automates everything — from stat tracking to lobby management — built specifically as a plugin for **Starfish Proxy**.
+一个用于 BedWars 的实用插件，提供自动查分与大厅辅助能力，减少手动操作。
 
----
+## 项目来源
 
-## ✨ Main Features
+本项目基于以下仓库开发：
 
-- **Player Stats Display:** Shows stars, FKDR, beds, winstreak, and more — in chat or TAB.  
-- **Auto Lobby 1 Party:** Search for partys lobby 1 FOR YOU. `/bwu find`
-- **Auto Stats in Lobby:** Instantly see stats of anyone who talks in pre-game.  
-- **Mention Stats:** Displays stats of anyone who mentions your name.  
-- **Auto /who + Team Threat Ranking:** Automatically lists players and ranks enemy teams by their combined FKDR & stars.  
-- **Auto Requeue:** Instantly dodge lobbies with players above your FKDR threshold.  
-- **Smart Cache:** Reduces API spam by caching stats & ping.  
-- **Easy Commands:** `/bwu stats`, `/bwu setthreshold`, `/bwu setkey`, and more.  
+- [Grillekkj/BedWars-Utilities-a-Plugin-For-StafishProxy](https://github.com/Grillekkj/BedWars-Utilities-a-Plugin-For-StafishProxy)
+- [UrchinGG/Starfish-Proxy](https://github.com/UrchinGG/Starfish-Proxy)
 
-🛠 **Fully configurable** — Hypixel API, Aurora API, cache timers, thresholds, nicknames, and more.  
-💡 Perfect for competitive BedWars players who want efficiency and automation.
+## 本项目主要改动
 
----
+1. **`/bwu` 相关界面与提示汉化**  
+   对 `bwu` 相关交互界面和提示信息进行了中文化处理。
 
-## ⚙️ Installation Guide
+2. **`autowho` 显示优化**  
+   基于设定阈值（默认 `1 FKDR / 200 Star`）进行提示，在计算后的队伍数据后追加显示 `[追加信息]`。
 
-### 📦 Step 1: Extract the Files
-1. Go to the **[Releases Page](https://github.com/Grillekkj/BedWars-Utilities-a-Plugin-For-StafishProxy/releases)** and download the latest `.zip` file.
-2. **Extract** the `.zip` file **and move the files out of the extracted folder** (don’t leave them inside the extra folder the zip creates).
-3. Place all files directly inside your **Starfish `plugins` folder**.  
-   - Packed as `.zip` because the plugin uses a **modular structure**.  
-   - There’s **one main file** for Starfish to recognize it, and multiple **module folders** for system components.  
-4. **Delete the `readme.md` file** (it’s not needed for the plugin to work).
+3. **`denick` 交互优化**  
+   点击 `denick` 警告时，会自动将相关信息粘贴到聊天输入栏，方便快速处理。
 
-⚠️ **Caution:**  
-If everything is correct, you’ll have a folder named **`bw-utilities-src`** and a file named **`bw-utilities-core-x-x-x.js`** in your Starfish `plugins` folder (`x` = version number).
+4. **增加自动更新配置项**  
+   新增自动更新开关，可按需关闭自动更新功能。
 
-### 🧹 Step 2: Remove the Old Plugin
-This version **completely replaces and improves** the old **BedWars Utilities by [@Hexze](https://github.com/Hexze)** — fixing bugs, adding new features, and improving performance.  
-➡️ You can safely **delete the old version**.
+## 功能概览
 
-### 🔑 Step 3: API Keys Required
-You’ll need two API keys for full functionality:
-- **Hypixel API Key:** [https://developer.hypixel.net/](https://developer.hypixel.net/)
-- **Aurora API Key:** [Aurora Discord Bot](https://discordapp.com/oauth2/authorize?client_id=1244205279697174539)
+- 自动显示玩家核心数据：星数、FKDR、破床数、连胜等
+- 赛前大厅发言自动查分
+- 被提及时自动查分
+- 自动执行 `/who` 并进行队伍威胁排序
+- 按 FKDR 阈值自动重排队（Auto Requeue）
+- 通过缓存降低 API 请求频率
 
-### 🧠 Step 4: First Setup
-After installing and starting your server:
-1. Run the following commands in-game:
-   ```
-   /bwu setkey <your Hypixel API key>
-   /bwu setaurora <your Aurora API key>
-   ```
-2. Then check your configuration and adjust the plugin to your needs.  
+## 快速开始
 
-### :speech_balloon: Step 5: Explore Commands
-Type `/bwu` in-game to see **all available commands** and options.
+### 1. 安装插件
 
-## 🖼️ Demonstration
+将以下内容放入 Starfish 的 `plugins` 目录：
 
-### 📊 Auto Stats in Pre-Game Lobby
-Automatically displays players' stats when they talk in the pre-game lobby.  
-<img width="628" height="112" alt="image" src="https://github.com/user-attachments/assets/e47ea025-92c7-4d69-8eae-bddcfad4a4e7" />
+- `bw-utilities-core-x-x-x.js`
+- `bw-utilities-src` 文件夹
 
----
+### 2. 配置 API Key
 
-### 🧾 Command to Check Everyone’s Stats
-Quickly check the stats of all players in the current lobby using a simple command.  
-<img width="739" height="180" alt="image" src="https://github.com/user-attachments/assets/a503150d-0afa-4197-883b-004119a9c248" />
+进入游戏后执行：
 
----
-
-### 🔁 Auto Requeue
-Automatically requeues when a player exceeds your configured FKDR threshold.  
-<img width="745" height="289" alt="image" src="https://github.com/user-attachments/assets/c865e3a3-f490-4e38-96b7-31e508a6b191" />
-
----
-
-### 🏆 Ranking Message After Game Start
-Displays a ranking message with the strongest teams once the game begins.  
-<img width="762" height="110" alt="image" src="https://github.com/user-attachments/assets/c57bba8a-6163-4d58-a6e9-a25008b865a5" />
-
----
-
-### 📋 Stats on TAB
-Displays players' stars, FKDR, beds, and winstreak directly on the TAB list.  
-<img width="1004" height="267" alt="image" src="https://github.com/user-attachments/assets/6b3648b8-5926-457a-a729-279b2c9eda21" />
-
-## 🤝 Contributing
-
-Want to help improve BedWars Utilities? We welcome contributions!
-
-### 📝 How to Contribute
-
-1. **Fork the Repository**  
-   Click the "Fork" button at the top of this repository to create your own copy.
-
-2. **Clone Your Fork**  
-   ```bash
-   git clone https://github.com/YOUR-USERNAME/BedWars-Utilities-a-Plugin-For-StafishProxy.git
-   ```
-
-3. **Create a New Branch**  
-   Always create a new branch for your changes:
-   ```bash
-   git checkout -b feat/your-feature-name
-   # or
-   git checkout -b fix/your-bug-fix
-   ```
-
-4. **Make Your Changes**  
-   Edit the code, test your changes thoroughly, and commit them:
-   ```bash
-   git add .
-   git commit -m "Added feature XYZ"
-   ```
-
-5. **Push to Your Fork**  
-   ```bash
-   git push origin feat/your-feature-name
-   ```
-
-6. **Open a Pull Request**  
-   Go to the original repository and click "New Pull Request" to submit your changes for review.
-
----
-
-### 💡 Development Setup Recommendation
-
-For easier development and testing, we recommend using **folder shortcuts** so you don't need to copy files back and forth:
-
-**Windows:**
-1. Clone the repository to your **Downloads** or **Desktop** folder:
-   ```
-   C:\Users\YourName\Downloads\BedWars-Utilities-a-Plugin-For-StafishProxy
-   ```
-
-2. In your Starfish `plugins` folder, create a **symbolic link** (folder shortcut) to the `bw-utilities-src` folder:
-   ```powershell
-   # Open PowerShell as Administrator
-   cd "C:\path\to\starfish\plugins"
-   New-Item -ItemType SymbolicLink -Path "bw-utilities-src" -Target "C:\Users\YourName\Downloads\BedWars-Utilities-a-Plugin-For-StafishProxy\bw-utilities-src"
-   ```
-
-3. Copy the `bw-utilities-core-x-x-x.js` file to the Starfish `plugins` folder as usual.
-
-**Benefits:**
-- ✅ Edit files directly in your cloned repository
-- ✅ Changes are instantly reflected in Starfish
-- ✅ Easy to commit and push changes via Git
-- ✅ No need to copy files between folders
-
-**macOS/Linux:**
-```bash
-cd /path/to/starfish/plugins
-ln -s ~/Downloads/BedWars-Utilities-a-Plugin-For-StafishProxy/bw-utilities-src bw-utilities-src
+```text
+/bwu setkey <Hypixel API Key>
+/bwu setaurora <Aurora API Key>
 ```
 
----
+### 3. 验证是否生效
 
-## 🔗 Links
-- **Starfish Proxy Repository:** [UrchinAPI/Starfish-Proxy](https://github.com/UrchinAPI/Starfish-Proxy)  
-- **BedWars Utilities Plugin Repository:** [Grillekkj/BedWars-Utilities-a-Plugin-For-StafishProxy](https://github.com/Grillekkj/BedWars-Utilities-a-Plugin-For-StafishProxy)
-- **Urchin Discord:** [https://discord.gg/WSdrmCkD3q](https://discord.gg/WSdrmCkD3q)
+- 输入 `/bwu` 查看命令列表
+- 进入大厅后观察是否出现自动查分信息
+
+## 常用命令
+
+```text
+/bwu
+/bwu stats
+/bwu setthreshold <value>
+/bwu find
+```
+
+- `/bwu`：查看全部命令与当前可用选项
+- `/bwu stats`：查询玩家数据
+- `/bwu setthreshold <value>`：设置自动重排队阈值
+- `/bwu find`：自动寻找 Lobby 1 组队
+
+## 命令说明（全部）
+
+以下命令均使用 `/bwu` 前缀。
+
+### 基础与配置
+
+- `/bwu`  
+  查看可用子命令列表。
+
+- `/bwu setkey <apikey>`  
+  设置 Hypixel API Key。
+
+- `/bwu setaurora <apikey>`  
+  设置 Aurora API Key。
+
+- `/bwu setthreshold <threshold>`  
+  设置自动重排队 FKDR 阈值（需为 `>= 0` 的数字）。
+
+- `/bwu ping`  
+  显示当前 Ping。
+
+- `/bwu clearstats`  
+  清空当前已显示/管理的战绩数据。
+
+- `/bwu rerank`  
+  强制重新触发 `/who`，刷新队伍威胁排行与 Tab 战绩。
+
+- `/bwu setinparty <true|false>`  
+  手动设置 `inParty` 状态（调试命令）。
+
+- 自动更新说明  
+  自动更新为配置项 `updater.checkOnStartup`，当前版本没有单独的 `/bwu` 开关命令。
+
+### 查分与对局
+
+- `/bwu stats <nickname>`  
+  查询指定玩家战绩。
+
+- `/bwu allstats [color] [sendTo]`  
+  显示当前追踪到的全部玩家战绩。  
+  `color` 可选：`red|blue|green|yellow|aqua|white|pink|gray`  
+  `sendTo` 可选：`private|team|party`（默认 `private`）
+
+- `/bwu gamestats`  
+  显示当前对局实时统计。
+
+- `/bwu playerstats <player>`  
+  显示当前对局指定玩家实时统计。
+
+- `/bwu gametab [setting] [value]`  
+  配置 Tab 对局统计显示。  
+  `setting` 可选：`on|off|kills|deaths|fk|bb|delay`  
+  当 `setting=delay` 时，`value` 必须在 `5-10`（秒）。  
+  不带参数时显示当前配置。
+
+### 组队招募（Find）
+
+- `/bwu find <mode> <playersToFind> <fkdrThreshold> [positions...]`  
+  自动招募队友。  
+  `mode`：`2|3|4`  
+  `playersToFind`：`1|2|3`，且必须小于 `mode`  
+  `fkdrThreshold`：最低 FKDR  
+  `positions`：可选位置描述（如 `rush`、`def`），可写多个
+
+- `/bwu find stop`  
+  停止自动招募。
+
+### 队列消息（Queue Dodge）
+
+- `/bwu setqdmsg <slot> <message...>`  
+  保存队列消息到槽位 `1-5`。  
+  省略 `message` 时会清空该槽位。
+
+- `/bwu listqdmsg`  
+  查看所有队列消息槽位。
+
+- `/bwu qdmsg <slot>`  
+  发送指定槽位消息（发送到 `/ac`）。
+
+### Sniped 消息
+
+- `/bwu setsniped <slot> <message...>`  
+  保存 sniped 消息到槽位 `1-5`。  
+  省略 `message` 时会清空该槽位。
+
+- `/bwu listsniped`  
+  查看所有 sniped 消息槽位。
+
+- `/bwu sniped <slot> [ac]`  
+  发送指定 sniped 消息。  
+  默认走 `/shout`（带冷却排队）；传 `ac` 则走 `/ac`。
+
+### 宏命令
+
+- `/bwu setmacro <name> <content...>`  
+  新建/覆盖宏。
+
+- `/bwu delmacro <name>`  
+  删除宏。
+
+- `/bwu macros`  
+  查看所有宏。
+
+- `/bwu m <name>`  
+  执行宏。
+
+### 名称历史
+
+- `/bwu mcnames <ign>`  
+  查询玩家历史名称（含当前名称与 UUID）。
+
+## 使用建议
+
+- 先完成 API Key 配置，再使用自动查分功能
+- 阈值可从较高值开始，按实战体验逐步调整

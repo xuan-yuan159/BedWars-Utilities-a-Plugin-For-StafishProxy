@@ -41,21 +41,27 @@ const STAT_DEFINITIONS = [
     dataKey: "wins",
     formatter: "_formatStat",
     chatPrefix: "Wins: ",
+    chatPrefixKey: "stats.prefix.wins_chat",
     tabPrefix: "W ",
+    tabPrefixKey: "stats.prefix.wins_tab",
   },
   {
     configKey: "showLosses",
     dataKey: "losses",
     formatter: "_formatStat",
     chatPrefix: "Losses: ",
+    chatPrefixKey: "stats.prefix.losses_chat",
     tabPrefix: "L ",
+    tabPrefixKey: "stats.prefix.losses_tab",
   },
   {
     configKey: "showBeds",
     dataKey: "beds_broken",
     formatter: "_formatStat",
     chatPrefix: "Beds: ",
+    chatPrefixKey: "stats.prefix.beds_chat",
     tabPrefix: "BB ",
+    tabPrefixKey: "stats.prefix.beds_tab",
   },
   {
     configKey: "showWinstreak",
@@ -264,11 +270,23 @@ class StatsFormatter {
   _getPrefix(mode, definition, statConfig) {
     const prefixColor = statConfig.prefixColor || "§8";
 
+    const t = (key, fallback) =>
+      typeof this.api.t === "function"
+        ? this.api.t(key, null, fallback)
+        : fallback;
+
+    const chatPrefix = definition.chatPrefixKey
+      ? t(definition.chatPrefixKey, definition.chatPrefix || "")
+      : definition.chatPrefix;
+    const tabPrefix = definition.tabPrefixKey
+      ? t(definition.tabPrefixKey, definition.tabPrefix || "")
+      : definition.tabPrefix;
+
     if (mode === "chat" || statConfig.showPrefix) {
       if (mode === "chat") {
-        return definition.chatPrefix ? prefixColor + definition.chatPrefix : "";
+        return chatPrefix ? prefixColor + chatPrefix : "";
       } else {
-        return definition.tabPrefix ? prefixColor + definition.tabPrefix : "";
+        return tabPrefix ? prefixColor + tabPrefix : "";
       }
     }
     return "";

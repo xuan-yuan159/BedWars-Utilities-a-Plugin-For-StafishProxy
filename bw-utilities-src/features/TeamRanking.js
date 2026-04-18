@@ -19,6 +19,13 @@ class TeamRanking {
     this.bwu = bwuInstance;
   }
 
+  _t(key, params = null, fallback = null) {
+    if (typeof this.api.t === "function") {
+      return this.api.t(key, params, fallback ?? key);
+    }
+    return fallback ?? key;
+  }
+
   _sendMessage(message) {
     let sendType = this.api.config.get("teamRanking.sendType") || "team";
     // If party mode but not in party, fallback to private
@@ -106,15 +113,21 @@ class TeamRanking {
     }
 
     this.api.chat(
-      `${this.api.getPrefix()} §eAnalyzing ${
-        playerNames.length
-      } players for team ranking...`
+      `${this.api.getPrefix()} §e${this._t(
+        "chat.team_ranking.analyzing",
+        { count: playerNames.length },
+        `Analyzing ${playerNames.length} players for team ranking...`
+      )}`
     );
 
     const myTeamLetter = this.getMyTeamLetter();
     if (!myTeamLetter) {
       this.api.chat(
-        `${this.api.getPrefix()} §cUnable to detect your team. Ranking will not be calculated.`
+        `${this.api.getPrefix()} §c${this._t(
+          "chat.team_ranking.cannot_detect_team",
+          null,
+          "Unable to detect your team. Ranking will not be calculated."
+        )}`
       );
       return;
     }    const { teamsData, isSolosMode } = await this.collectTeamsData(
@@ -152,7 +165,9 @@ class TeamRanking {
         }
 
         const realName =
-          this.bwu.resolvedNicks.get(playerName.toLowerCase()) || playerName;        const stats = await this.apiService.getPlayerStats(realName);
+          this.bwu.resolvedNicks.get(playerName.toLowerCase()) || playerName;
+        const stats = await this.apiService.getPlayerStats(realName);
+        const isNicked = !stats || stats.isNicked;
         const fkdr =
           stats && !stats.isNicked && stats.fkdr !== undefined ? stats.fkdr : 5;
         const stars =
@@ -177,6 +192,7 @@ class TeamRanking {
             totalThreat: 0,
             playerCount: 0,
             isMyTeam: isMyTeam,
+            players: [],
           };
         }
         teamsData[teamLetter].totalFkdr += fkdr;
@@ -185,6 +201,20 @@ class TeamRanking {
         teamsData[teamLetter].totalWinstreak += winstreak;
         teamsData[teamLetter].totalThreat += threat;
         teamsData[teamLetter].playerCount += 1;
+        const hasResolvedName =
+          !isNicked &&
+          typeof realName === "string" &&
+          realName.toLowerCase() !== playerName.toLowerCase();
+        const displayName = hasResolvedName
+          ? `${playerName}(${realName})`
+          : playerName;
+        teamsData[teamLetter].players.push({
+          name: displayName,
+          isNicked,
+          fkdr,
+          stars,
+          threat,
+        });
       })
     );
 
@@ -193,6 +223,52 @@ class TeamRanking {
 
     return { teamsData, isSolosMode };
   }
+
+  _formatCompactFkdr(value) {
+    if (!Number.isFinite(value)) return "0";
+    return Number(value).toFixed(2).replace(/\.?0+$/, "");
+  }
+
+  _getTeamHighlightDetails(team) {
+    const highlightedPlayers = (team.players || [])
+      .filter(
+        (player) => player.isNicked || player.fkdr >= 1 || player.stars >= 200
+      )
+      .sort((a, b) => {
+        if (a.isNicked !== b.isNicked) return a.isNicked ? -1 : 1;
+        if (a.isNicked && b.isNicked) return a.name.localeCompare(b.name);
+        if (b.threat !== a.threat) return b.threat - a.threat;
+        if (b.fkdr !== a.fkdr) return b.fkdr - a.fkdr;
+        if (b.stars !== a.stars) return b.stars - a.stars;
+        return a.name.localeCompare(b.name);
+      });
+
+    if (highlightedPlayers.length === 0) return "";
+
+    const detailParts = highlightedPlayers.map((player) => {
+      if (player.isNicked) {
+        return `${player.name}-nicked`;
+      }
+
+      const hasQualifiedFkdr = player.fkdr >= 1;
+      const hasQualifiedStars = player.stars >= 200;
+      const formattedFkdr = this._formatCompactFkdr(player.fkdr);
+      const roundedStars = Math.round(player.stars);
+
+      if (hasQualifiedFkdr && hasQualifiedStars) {
+        return `${player.name}-${roundedStars}✫-${formattedFkdr}`;
+      }
+
+      if (hasQualifiedStars) {
+        return `${player.name}-${roundedStars}✫`;
+      }
+
+      return `${player.name}-${formattedFkdr}`;
+    });
+
+    return ` [ ${detailParts.join(", ")} ]`;
+  }
+
   async displayRanking(teamsData, isSolosMode, rankingSent) {
     if (rankingSent) return;
 
@@ -216,6 +292,7 @@ class TeamRanking {
         totalThreat: data.totalThreat,
         playerCount: data.playerCount,
         isMyTeam: data.isMyTeam || false,
+        players: data.players || [],
       }));
 
     const enemyTeams = allTeams.filter(team => !team.isMyTeam).sort((a, b) => b.totalThreat - a.totalThreat);
@@ -223,7 +300,11 @@ class TeamRanking {
 
     if (enemyTeams.length === 0) {
       this.api.chat(
-        `${this.api.getPrefix()} §cUnable to calculate ranking (no enemy team found).`
+        `${this.api.getPrefix()} §c${this._t(
+          "chat.team_ranking.no_enemy_team",
+          null,
+          "Unable to calculate ranking (no enemy team found)."
+        )}`
       );
       return;
     }
@@ -243,7 +324,8 @@ class TeamRanking {
         const totalStars = Math.round(team.totalStars);
         statsDisplay = `${totalStars}✫ | ${team.totalFkdr.toFixed(2)} FKDR`;
       }
-      const teamInfo = `${index + 1}. ${teamColor}${team.name} §f(${statsDisplay})`;
+      const teamDetails = this._getTeamHighlightDetails(team);
+      const teamInfo = `${index + 1}. ${teamColor}${team.name} §f(${statsDisplay})${teamDetails}`;
       return teamInfo;
     });
 
@@ -260,7 +342,11 @@ class TeamRanking {
         const totalStars = Math.round(myTeam.totalStars);
         statsDisplay = `${totalStars}✫ | ${myTeam.totalFkdr.toFixed(2)} FKDR`;
       }
-      const yourTeamInfo = `§7[YOU] ${teamColor}${myTeam.name} §f(${statsDisplay})`;
+      const yourTeamInfo = `§7[${this._t(
+        "chat.team_ranking.you_tag",
+        null,
+        "YOU"
+      )}] ${teamColor}${myTeam.name} §f(${statsDisplay})`;
       rankingParts.push(yourTeamInfo);
     }
 
@@ -300,7 +386,8 @@ class TeamRanking {
     }
     if (currentMessage) {
       messagesToSend.push(currentMessage);
-    }    for (let i = 0; i < messagesToSend.length; i++) {
+    }
+    for (let i = 0; i < messagesToSend.length; i++) {
       const msg = messagesToSend[i];
       setTimeout(() => {
         this._sendMessage(msg);

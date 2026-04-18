@@ -3,7 +3,8 @@ const path = require("node:path");
 require("./bw-utilities-src/core/patcher");
 
 const BedWarsUtilities = require("./bw-utilities-src/BedWarsUtilities");
-const configSchema = require("./bw-utilities-src/config/configSchema");
+const createConfigSchema = require("./bw-utilities-src/config/configSchema");
+const { Localizer } = require("./bw-utilities-src/i18n/Localizer");
 const { Updater } = require("./bw-utilities-src/updater/updater");
 
 const pluginFullMetadata = {
@@ -38,17 +39,35 @@ module.exports = function BedWarsUtilitiesPlugin(api) {
 
   api.metadata(metadataForAPI);
 
-  try {
-    pluginFullMetadata.currentFileName = path.basename(__filename);
-    const updater = new Updater(api, pluginFullMetadata);
-    updater.checkForUpdates();
-  } catch (e) {
-    console.error(`[BWU Updater] Failed to start: ${e.message}`);
+  const localizer = new Localizer(api, {
+    defaultLocale: "zh-CN",
+    fallbackLocale: "en-US",
+  });
+
+  api.t = (key, params, fallback) => localizer.t(key, params, fallback);
+  api.tForLocale = (locale, key, params, fallback) =>
+    localizer.tForLocale(locale, key, params, fallback);
+
+  const startupLocale = localizer.getConfiguredLocale();
+  const configSchema = createConfigSchema((key, params, fallback) =>
+    localizer.tForLocale(startupLocale, key, params, fallback)
+  );
+
+  api.initializeConfig(configSchema);
+  api.configSchema(configSchema);
+
+  const shouldCheckUpdates = api.config.get("updater.checkOnStartup") !== false;
+  if (shouldCheckUpdates) {
+    try {
+      pluginFullMetadata.currentFileName = path.basename(__filename);
+      const updater = new Updater(api, pluginFullMetadata);
+      updater.checkForUpdates();
+    } catch (e) {
+      console.error(`[BWU Updater] Failed to start: ${e.message}`);
+    }
   }
 
   const bwu = new BedWarsUtilities(api);
-  api.initializeConfig(configSchema);
-  api.configSchema(configSchema);
   bwu.registerHandlers();
 
   return bwu;
