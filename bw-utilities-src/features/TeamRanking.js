@@ -120,7 +120,11 @@ class TeamRanking {
       )}`
     );
 
-    const myTeamLetter = this.getMyTeamLetter();
+    let myTeamLetter = this.getMyTeamLetter();
+    if (!myTeamLetter) {
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      myTeamLetter = this.getMyTeamLetter();
+    }
     if (!myTeamLetter) {
       this.api.chat(
         `${this.api.getPrefix()} §c${this._t(
@@ -130,7 +134,9 @@ class TeamRanking {
         )}`
       );
       return;
-    }    const { teamsData, isSolosMode } = await this.collectTeamsData(
+    }
+
+    const { teamsData, isSolosMode } = await this.collectTeamsData(
       playerNames,
       myTeamLetter
     );

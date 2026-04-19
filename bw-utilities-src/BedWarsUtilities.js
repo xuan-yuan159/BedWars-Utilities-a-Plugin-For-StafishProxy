@@ -46,6 +46,7 @@ class BedWarsUtilities {  constructor(api) {
     this.lastCleanMessage = null;
     this.requeueTriggered = false;
     this.rankingSentThisMatch = false;
+    this.forceRankingOnNextWho = false;
     this.resolvedNicks = new Map();
     this.realNameToNickMap = new Map();
     this.apiKeyCheckPerformed = false;
@@ -426,6 +427,7 @@ class BedWarsUtilities {  constructor(api) {
     this.lastCleanMessage = null;
     this.requeueTriggered = false;
     this.rankingSentThisMatch = false;
+    this.forceRankingOnNextWho = false;
     this.resolvedNicks.clear();
     this.realNameToNickMap.clear();
     // Note: inParty is NOT reset here - party status persists across world changes
@@ -443,8 +445,13 @@ class BedWarsUtilities {  constructor(api) {
     }
   }async processPlayerData(originalPlayerNames, resolvedPlayerNames) {
     // Start ranking flow first, but do not block tab rendering.
-    if (this.gameHandler.gameStarted && !this.rankingSentThisMatch) {
+    const shouldRunRanking =
+      !this.rankingSentThisMatch &&
+      (this.gameHandler.gameStarted || this.forceRankingOnNextWho);
+
+    if (shouldRunRanking) {
       this.rankingSentThisMatch = true;
+      this.forceRankingOnNextWho = false;
 
       this.teamRanking
         .processAndDisplayRanking(originalPlayerNames, false)
@@ -455,8 +462,10 @@ class BedWarsUtilities {  constructor(api) {
           this.rankingSentThisMatch = false;
         });
 
-      // Start in-game tracking when game begins
-      this.inGameTracker.startTracking(new Set(resolvedPlayerNames));
+      if (this.gameHandler.gameStarted) {
+        // Start in-game tracking when game begins
+        this.inGameTracker.startTracking(new Set(resolvedPlayerNames));
+      }
     }
 
     const playerPairs = originalPlayerNames.map((originalName, index) => ({

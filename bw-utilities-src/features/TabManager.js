@@ -5,6 +5,9 @@ class TabManager {
     this.statsFormatter = statsFormatter;
     this.bwu = bwuInstance;
     this.managedPlayers = new Map();
+    this.pendingPlayerRetries = new Map();
+    this.maxPlayerRenderRetries = 4;
+    this.playerRenderRetryDelayMs = 400;
     
     // Tab alternation state
     this.showingGameStats = false;
@@ -151,6 +154,14 @@ class TabManager {
         }
         this.managedPlayers.delete(name);
         this.cachedRegularStats.delete(name);
+        this._clearPendingRetry(name);
+      }
+    }
+
+    if (type === "all") {
+      for (const [pendingName, pending] of this.pendingPlayerRetries.entries()) {
+        clearTimeout(pending.timeoutId);
+        this.pendingPlayerRetries.delete(pendingName);
       }
     }
   }
@@ -186,12 +197,70 @@ class TabManager {
     await Promise.all(Array.from({ length: workerCount }, () => worker()));
   }
 
-  async addPlayerStatsToTab(originalPlayerName, resolvedPlayerName) {
+  _clearPendingRetry(playerName) {
+    const pending = this.pendingPlayerRetries.get(playerName);
+    if (!pending) {
+      return;
+    }
+
+    clearTimeout(pending.timeoutId);
+    this.pendingPlayerRetries.delete(playerName);
+  }
+
+  _schedulePlayerRetry(originalPlayerName, resolvedPlayerName, nextAttempt, reason) {
+    if (this.managedPlayers.has(originalPlayerName)) {
+      this._clearPendingRetry(originalPlayerName);
+      return;
+    }
+
+    if (nextAttempt > this.maxPlayerRenderRetries) {
+      this._clearPendingRetry(originalPlayerName);
+      this.api.debugLog(
+        `[BWU TabManager] Retry limit reached for ${originalPlayerName} (${reason})`
+      );
+      return;
+    }
+
+    const pending = this.pendingPlayerRetries.get(originalPlayerName);
+    if (pending) {
+      if (pending.attempt >= nextAttempt) {
+        pending.resolvedName = resolvedPlayerName;
+        this.pendingPlayerRetries.set(originalPlayerName, pending);
+        return;
+      }
+      clearTimeout(pending.timeoutId);
+    }
+
+    const timeoutId = setTimeout(() => {
+      const latestPending = this.pendingPlayerRetries.get(originalPlayerName);
+      if (!latestPending || latestPending.timeoutId !== timeoutId) {
+        return;
+      }
+
+      this.pendingPlayerRetries.delete(originalPlayerName);
+      void this.addPlayerStatsToTab(
+        originalPlayerName,
+        latestPending.resolvedName,
+        nextAttempt
+      );
+    }, this.playerRenderRetryDelayMs);
+
+    this.pendingPlayerRetries.set(originalPlayerName, {
+      timeoutId,
+      attempt: nextAttempt,
+      resolvedName: resolvedPlayerName,
+    });
+  }
+
+  async addPlayerStatsToTab(originalPlayerName, resolvedPlayerName, attempt = 0) {
+    const resolvedName = resolvedPlayerName || originalPlayerName;
+    let playerUuid = null;
+
     try {
-      const resolvedName = resolvedPlayerName || originalPlayerName;
       const existingManaged = this.managedPlayers.get(originalPlayerName);
       if (existingManaged) {
         existingManaged.resolvedName = resolvedName;
+        this._clearPendingRetry(originalPlayerName);
         return;
       }
 
@@ -210,11 +279,26 @@ class TabManager {
         }
       } else {
         player = this.api.getPlayerByName(originalPlayerName);
+        if (
+          !player?.uuid &&
+          resolvedName &&
+          resolvedName.toLowerCase() !== originalPlayerName.toLowerCase()
+        ) {
+          player = this.api.getPlayerByName(resolvedName);
+        }
       }
 
       if (!player?.uuid) {
+        this._schedulePlayerRetry(
+          originalPlayerName,
+          resolvedName,
+          attempt + 1,
+          "player uuid unavailable"
+        );
         return;
       }
+      playerUuid = player.uuid;
+      this._clearPendingRetry(originalPlayerName);
       if (this.managedPlayers.has(originalPlayerName)) return;
 
       const finalNameForStats = resolvedName;
@@ -262,13 +346,57 @@ class TabManager {
 
       this.managedPlayers.set(originalPlayerName, {
         type: "auto-stats",
-        uuid: player.uuid,
+        uuid: playerUuid,
         resolvedName: finalNameForStats,
       });
     } catch (error) {
       console.error(
         `[BWU] Failed to add stats to tab for ${originalPlayerName}: ${error.stack}`
       );
+
+      if (this.managedPlayers.has(originalPlayerName)) {
+        return;
+      }
+
+      if (attempt < this.maxPlayerRenderRetries) {
+        this._schedulePlayerRetry(
+          originalPlayerName,
+          resolvedName,
+          attempt + 1,
+          "tab render exception"
+        );
+        return;
+      }
+
+      if (playerUuid) {
+        const fallbackSuffix = this.statsFormatter.formatStats(
+          "tab",
+          resolvedName,
+          null,
+          null
+        );
+
+        this.cachedRegularStats.set(originalPlayerName, fallbackSuffix);
+        if (!this.showingGameStats) {
+          this.api.setDisplayNameSuffix(playerUuid, fallbackSuffix);
+        } else {
+          const gameStats =
+            this.bwu.inGameTracker.getPlayerStats(originalPlayerName) ||
+            this.bwu.inGameTracker.getPlayerStats(resolvedName);
+          if (this._hasNonZeroEnabledGameStats(gameStats)) {
+            const gameStatsSuffix = this.statsFormatter.formatGameStatsForTab(gameStats);
+            this.api.setDisplayNameSuffix(playerUuid, gameStatsSuffix || fallbackSuffix);
+          } else {
+            this.api.setDisplayNameSuffix(playerUuid, fallbackSuffix);
+          }
+        }
+
+        this.managedPlayers.set(originalPlayerName, {
+          type: "auto-stats",
+          uuid: playerUuid,
+          resolvedName: resolvedName,
+        });
+      }
     }
   }
 

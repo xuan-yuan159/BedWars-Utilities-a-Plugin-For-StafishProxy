@@ -905,6 +905,8 @@ class CommandHandler {
 
       // Reset ranking sent flag to allow re-ranking
       this.bwu.rankingSentThisMatch = false;
+      // Force ranking run on next ONLINE list, even if gameStarted is stale
+      this.bwu.forceRankingOnNextWho = true;
 
       // Send /who command to trigger the ranking and tab refresh
       // The existing onChat handler will process the response
