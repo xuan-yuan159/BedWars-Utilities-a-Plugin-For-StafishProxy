@@ -2,7 +2,27 @@ class PartyFinder {
   constructor(api, apiService) {
     this.api = api;
     this.apiService = apiService;
-    this.messageSuffixes = ["o/", "hello", "hi", "<3"];
+    this.messageSuffixes = [
+      "aaa",
+      "bbbb",
+      "ccccc",
+      "dddddd",
+      "eeeeeee",
+      "ffffffff",
+      "ggggggggg",
+      "hhhhhhhhhh",
+      "iiiiiiiiiii",
+      "jjjjjjjjjjjj",
+      "kkkkkkkkkkkkk",
+      "llllllllllllll",
+      "mmmmmmmmmmmmmmm",
+      "nnnnnnnnnnnnnnnn",
+      "ooooooooooooooooo",
+      "pppppppppppppppppp",
+      "qqqqqqqqqqqqqqqqqqq",
+      "rrrrrrrrrrrrrrrrrrrr",
+      "(ﾉ◕ヮ◕)ﾉ*:･ﾟ✧(ﾉ◕ヮ◕)ﾉ*:･ﾟ✧",
+    ];
     this.resetState();
   }
 
@@ -261,4 +281,3 @@ class PartyFinder {
 }
 
 module.exports = PartyFinder;
-
