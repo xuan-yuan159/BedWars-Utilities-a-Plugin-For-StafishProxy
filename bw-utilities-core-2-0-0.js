@@ -5,7 +5,7 @@ require("./bw-utilities-src/core/patcher");
 const BedWarsUtilities = require("./bw-utilities-src/BedWarsUtilities");
 const createConfigSchema = require("./bw-utilities-src/config/configSchema");
 const { Localizer } = require("./bw-utilities-src/i18n/Localizer");
-const { Updater } = require("./bw-utilities-src/updater/updater");
+const UPDATER_ENABLE_ENV_KEY = "BWU_ENABLE_UPDATER";
 
 function resolveBooleanSetting(value, defaultValue = false) {
   if (typeof value === "boolean") {
@@ -27,6 +27,10 @@ function resolveBooleanSetting(value, defaultValue = false) {
   }
 
   return defaultValue;
+}
+
+function isUpdaterRuntimeEnabled() {
+  return resolveBooleanSetting(process.env[UPDATER_ENABLE_ENV_KEY], false);
 }
 
 const pluginFullMetadata = {
@@ -84,16 +88,23 @@ module.exports = function BedWarsUtilitiesPlugin(api) {
     updaterCheckOnStartupRaw !== undefined
       ? updaterCheckOnStartupRaw
       : legacyUpdaterEnabledRaw;
-  const shouldCheckUpdates = resolveBooleanSetting(updaterSettingRaw, false);
+  const updaterRuntimeEnabled = isUpdaterRuntimeEnabled();
+  const updaterConfigEnabled = resolveBooleanSetting(updaterSettingRaw, false);
+  const shouldCheckUpdates = updaterRuntimeEnabled && updaterConfigEnabled;
 
   if (shouldCheckUpdates) {
     try {
+      const { Updater } = require("./bw-utilities-src/updater/updater");
       pluginFullMetadata.currentFileName = path.basename(__filename);
       const updater = new Updater(api, pluginFullMetadata);
       updater.checkForUpdates();
     } catch (e) {
       console.error(`[BWU Updater] Failed to start: ${e.message}`);
     }
+  } else if (!updaterRuntimeEnabled) {
+    console.log(
+      `[BWU Updater] Disabled by runtime lock. Set ${UPDATER_ENABLE_ENV_KEY}=true to enable.`
+    );
   }
 
   const bwu = new BedWarsUtilities(api);
