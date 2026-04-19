@@ -7,6 +7,28 @@ const createConfigSchema = require("./bw-utilities-src/config/configSchema");
 const { Localizer } = require("./bw-utilities-src/i18n/Localizer");
 const { Updater } = require("./bw-utilities-src/updater/updater");
 
+function resolveBooleanSetting(value, defaultValue = false) {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "number") {
+    return value !== 0;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (["true", "1", "yes", "on", "enabled"].includes(normalized)) {
+      return true;
+    }
+    if (["false", "0", "no", "off", "disabled"].includes(normalized)) {
+      return false;
+    }
+  }
+
+  return defaultValue;
+}
+
 const pluginFullMetadata = {
   name: "bwu",
   displayName: "BedWars Utilities",
@@ -56,7 +78,14 @@ module.exports = function BedWarsUtilitiesPlugin(api) {
   api.initializeConfig(configSchema);
   api.configSchema(configSchema);
 
-  const shouldCheckUpdates = api.config.get("updater.checkOnStartup") !== false;
+  const updaterCheckOnStartupRaw = api.config.get("updater.checkOnStartup");
+  const legacyUpdaterEnabledRaw = api.config.get("updater.enabled");
+  const updaterSettingRaw =
+    updaterCheckOnStartupRaw !== undefined
+      ? updaterCheckOnStartupRaw
+      : legacyUpdaterEnabledRaw;
+  const shouldCheckUpdates = resolveBooleanSetting(updaterSettingRaw, false);
+
   if (shouldCheckUpdates) {
     try {
       pluginFullMetadata.currentFileName = path.basename(__filename);

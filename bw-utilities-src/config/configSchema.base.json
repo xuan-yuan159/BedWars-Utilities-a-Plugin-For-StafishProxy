@@ -1980,7 +1980,7 @@
     "description": "Configure automatic update check behavior on startup.",
     "defaults": {
       "updater": {
-        "checkOnStartup": true
+        "checkOnStartup": false
       }
     },
     "settings": [
