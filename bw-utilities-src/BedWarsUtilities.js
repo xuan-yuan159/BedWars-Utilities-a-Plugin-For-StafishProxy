@@ -442,23 +442,29 @@ class BedWarsUtilities {  constructor(api) {
       );
     }
   }async processPlayerData(originalPlayerNames, resolvedPlayerNames) {
-    // Only run team ranking if we're in a game (not in lobby)
+    // Start ranking flow first, but do not block tab rendering.
     if (this.gameHandler.gameStarted && !this.rankingSentThisMatch) {
-      await this.teamRanking.processAndDisplayRanking(
-        originalPlayerNames,
-        this.rankingSentThisMatch
-      );
       this.rankingSentThisMatch = true;
-      
+
+      this.teamRanking
+        .processAndDisplayRanking(originalPlayerNames, false)
+        .catch((error) => {
+          console.error(
+            `[BWU] Team ranking failed without blocking tab render: ${error?.stack ?? error}`
+          );
+          this.rankingSentThisMatch = false;
+        });
+
       // Start in-game tracking when game begins
       this.inGameTracker.startTracking(new Set(resolvedPlayerNames));
     }
 
-    for (let i = 0; i < originalPlayerNames.length; i++) {
-      const originalName = originalPlayerNames[i];
-      const resolvedName = resolvedPlayerNames[i];
-      await this.tabManager.addPlayerStatsToTab(originalName, resolvedName);
-    }
+    const playerPairs = originalPlayerNames.map((originalName, index) => ({
+      originalName,
+      resolvedName: resolvedPlayerNames[index] || originalName,
+    }));
+
+    await this.tabManager.addPlayersStatsToTabBatch(playerPairs, 6);
   }
 
   _handlePartyJoinMessage(cleanMessage) {

@@ -4,6 +4,24 @@ class ApiService {
     this.cache = cacheManager;
   }
 
+  _isTimeoutError(error) {
+    return error?.name === "AbortError";
+  }
+
+  async _fetchWithTimeout(url, options = {}, timeoutMs = 3000) {
+    const controller = new AbortController();
+    const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      return await fetch(url, {
+        ...options,
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeoutHandle);
+    }
+  }
+
   async testHypixelApiKey() {
     try {
       const apiKey = this.api.config.get("main.hypixelApiKey");
@@ -11,9 +29,13 @@ class ApiService {
         return { isValid: false, reason: "API key not set." };
       }
 
-      const response = await fetch(`https://api.hypixel.net/v2/counts`, {
-        headers: { "API-Key": apiKey },
-      });
+      const response = await this._fetchWithTimeout(
+        `https://api.hypixel.net/v2/counts`,
+        {
+          headers: { "API-Key": apiKey },
+        },
+        3000
+      );
 
       const data = await response.json();
 
@@ -41,8 +63,10 @@ class ApiService {
 
     // use mojang api to get uuid if starfish and cache fails
     try {
-      const response = await fetch(
-        `https://api.mojang.com/users/profiles/minecraft/${playerName}`
+      const response = await this._fetchWithTimeout(
+        `https://api.mojang.com/users/profiles/minecraft/${playerName}`,
+        {},
+        2500
       );
       if (!response.ok) return null;
 
@@ -50,8 +74,11 @@ class ApiService {
       this.cache.setUuid(playerName, data.id);
       return data.id;
     } catch (error) {
+      const reason = this._isTimeoutError(error)
+        ? "request timed out"
+        : error.message;
       console.error(
-        `[BWU MOJANG API] Failed to fetch UUID for ${playerName}: ${error.message}`
+        `[BWU MOJANG API] Failed to fetch UUID for ${playerName}: ${reason}`
       );
       return null;
     }
@@ -129,9 +156,10 @@ class ApiService {
       const uuid = await this.getUuid(playerName);
       if (!uuid) return { isNicked: true };
 
-      const response = await fetch(
+      const response = await this._fetchWithTimeout(
         `https://api.hypixel.net/v2/player?uuid=${uuid}`,
-        { headers: { "API-Key": apiKey } }
+        { headers: { "API-Key": apiKey } },
+        3000
       );
 
       if (!response.ok) return null;
@@ -164,8 +192,11 @@ class ApiService {
       this.cache.setPlayerStats(playerName, relevantStats);
       return relevantStats;
     } catch (error) {
+      const reason = this._isTimeoutError(error)
+        ? "request timed out"
+        : error.message;
       console.error(
-        `[BWU HYPIXEL API] Failed to fetch player stats for ${playerName}: ${error.message}`
+        `[BWU HYPIXEL API] Failed to fetch player stats for ${playerName}: ${reason}`
       );
       return null;
     }
@@ -179,8 +210,10 @@ class ApiService {
       const apiKey = this.api.config.get("main.auroraApiKey");
       if (!apiKey || apiKey === "YOUR_AURORA_API_KEY_HERE") return null;
 
-      const response = await fetch(
-        `https://bordic.xyz/api/v2/resources/ping?key=${apiKey}&uuid=${uuid}`
+      const response = await this._fetchWithTimeout(
+        `https://bordic.xyz/api/v2/resources/ping?key=${apiKey}&uuid=${uuid}`,
+        {},
+        2500
       );
 
       if (!response.ok) return null;
@@ -193,8 +226,11 @@ class ApiService {
       this.cache.setPing(uuid, avgPing);
       return avgPing;
     } catch (error) {
+      const reason = this._isTimeoutError(error)
+        ? "request timed out"
+        : error.message;
       console.error(
-        `[BWU AURORA API] Failed to fetch ping for ${uuid}: ${error.message}`
+        `[BWU AURORA API] Failed to fetch ping for ${uuid}: ${reason}`
       );
       return null;
     }
