@@ -13,7 +13,7 @@ class PartyFinder {
       "hhhhhhhhhh",
       "iiiiiiiiiii",
       "jjjjjjjjjjjj",
-      "kkkkkkkkkkkkk",
+      "sssssssssssss",
       "llllllllllllll",
       "mmmmmmmmmmmmmmm",
       "nnnnnnnnnnnnnnnn",
