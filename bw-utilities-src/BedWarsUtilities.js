@@ -92,7 +92,7 @@ class BedWarsUtilities {  constructor(api) {
   registerHandlers() {
     this.api.on("player_join", this.handleFirstPlayerJoin.bind(this));
     this.api.on("chat", this.onChat.bind(this));
-    this.api.on("respawn", this.handleRespawn.bind(this)); // 复活时先判断是否仍在当前对局，避免误清空状态
+    this.api.on("respawn", this.onWorldChange.bind(this)); // 保持原始 auto who 检测链路，respawn 继续作为切图重置入口
     this.api.on("denicker:nick_resolved", this.onNickResolved.bind(this));
     this.api.intercept(
       "packet:server:chat",
@@ -104,26 +104,6 @@ class BedWarsUtilities {  constructor(api) {
     );
 
     CommandRegistry.register(this.api, this.commandHandler);
-  }
-
-  /**
-   * 区分局内复活与真正切世界，避免复活后残留灰名或错误重置战绩状态
-   */
-  handleRespawn() {
-    if (this.gameHandler.gameStarted || this.inGameTracker.isTracking) {
-      this.api.debugLog(
-        "[BWU] Respawn detected during active match, preserving tracked tab state."
-      );
-      setTimeout(() => {
-        this.tabManager.refreshManagedPlayerDisplayNames();
-      }, 250); // 复活后的首个时机快速重挂后缀，尽早恢复名字颜色
-      setTimeout(() => {
-        this.tabManager.refreshManagedPlayerDisplayNames();
-      }, 1500); // 延迟再刷新一次，覆盖服务端晚到达的颜色同步
-      return;
-    }
-
-    this.onWorldChange();
   }
 
   extractJsonFromLine(line) {
