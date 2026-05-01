@@ -1,4 +1,7 @@
 class TabManager {
+  /**
+   * 管理 Tab 战绩后缀与对局内轮播状态
+   */
   constructor(api, apiService, statsFormatter, bwuInstance) {
     this.api = api;
     this.apiService = apiService;
@@ -13,6 +16,8 @@ class TabManager {
     this.showingGameStats = false;
     this.tabAlternationInterval = null;
     this.cachedRegularStats = new Map(); // Store regular stats suffixes
+    this.displayRefreshInterval = null; // 定时重挂后缀，避免名字颜色状态被旧渲染卡住
+    this.displayRefreshIntervalMs = 1500; // 定时重挂后缀的间隔，覆盖玩家复活后的颜色恢复
   }
 
   /**
@@ -38,7 +43,7 @@ class TabManager {
   }
 
   /**
-   * Stop tab alternation and restore regular stats
+   * 停止对局内轮播并恢复常规战绩显示
    */
   stopTabAlternation() {
     if (this.tabAlternationInterval) {
@@ -52,6 +57,7 @@ class TabManager {
       this._restoreRegularStats();
     }
 
+    this.stopDisplayRefreshLoop(); // 对局轮播结束后停止周期性重刷
     this.cachedRegularStats.clear();
     this.api.debugLog(`[BWU TabManager] Stopped tab alternation`);
   }
@@ -80,7 +86,7 @@ class TabManager {
   }
 
   /**
-   * Show game stats in tab for all managed players
+   * 在 Tab 中显示对局内实时数据，并同步刷新名字颜色状态
    */
   _showGameStats() {
     for (const [playerName, data] of this.managedPlayers.entries()) {
@@ -92,20 +98,20 @@ class TabManager {
       if (hasRenderableStats) {
         const gameStatsSuffix = this.statsFormatter.formatGameStatsForTab(gameStats);
         if (gameStatsSuffix) {
-          this.api.setDisplayNameSuffix(data.uuid, gameStatsSuffix);
+          this._applyDisplayNameSuffix(data.uuid, gameStatsSuffix); // 轮播到对局数据时强制重建显示名
           continue;
         }
       }
 
       const cachedSuffix = this.cachedRegularStats.get(playerName);
       if (cachedSuffix) {
-        this.api.setDisplayNameSuffix(data.uuid, cachedSuffix);
+        this._applyDisplayNameSuffix(data.uuid, cachedSuffix); // 无对局数据时回落常规后缀并刷新颜色
       }
     }
   }
 
   /**
-   * Restore regular stats from cache
+   * 从缓存恢复常规战绩后缀，并同步刷新名字颜色状态
    */
   _restoreRegularStats() {
     for (const [playerName, data] of this.managedPlayers.entries()) {
@@ -113,13 +119,13 @@ class TabManager {
 
       const cachedSuffix = this.cachedRegularStats.get(playerName);
       if (cachedSuffix) {
-        this.api.setDisplayNameSuffix(data.uuid, cachedSuffix);
+        this._applyDisplayNameSuffix(data.uuid, cachedSuffix); // 切回常规战绩时也重新挂载后缀
       }
     }
   }
 
   /**
-   * Update game stats for a specific player (called when stats change)
+   * 在对局数据变化时刷新单个玩家的 Tab 后缀
    */
   updatePlayerGameStats(playerName) {
     if (!this.showingGameStats) return;
@@ -135,17 +141,20 @@ class TabManager {
     if (this._hasNonZeroEnabledGameStats(gameStats)) {
       const gameStatsSuffix = this.statsFormatter.formatGameStatsForTab(gameStats);
       if (gameStatsSuffix) {
-        this.api.setDisplayNameSuffix(data.uuid, gameStatsSuffix);
+        this._applyDisplayNameSuffix(data.uuid, gameStatsSuffix); // 重新挂载后缀，确保复活后的名字颜色被刷新
       }
       return;
     }
 
     const cachedSuffix = this.cachedRegularStats.get(managedPlayerName);
     if (cachedSuffix) {
-      this.api.setDisplayNameSuffix(data.uuid, cachedSuffix);
+      this._applyDisplayNameSuffix(data.uuid, cachedSuffix); // 回退到常规后缀时同步刷新名字颜色
     }
   }
 
+  /**
+   * 清理已管理的玩家并在必要时关闭重刷循环
+   */
   clearManagedPlayers(type = "all") {
     for (const [name, data] of this.managedPlayers.entries()) {
       if (type === "all" || data.type === type) {
@@ -163,6 +172,10 @@ class TabManager {
         clearTimeout(pending.timeoutId);
         this.pendingPlayerRetries.delete(pendingName);
       }
+    }
+
+    if (this.managedPlayers.size === 0) {
+      this.stopDisplayRefreshLoop(); // 没有受管玩家时停止定时刷新
     }
   }
 
@@ -252,6 +265,88 @@ class TabManager {
     });
   }
 
+  /**
+   * 持续重挂 Tab 后缀，保证服务端更新名字颜色后客户端也能同步显示
+   */
+  startDisplayRefreshLoop() {
+    if (this.displayRefreshInterval) {
+      return;
+    }
+
+    this.displayRefreshInterval = setInterval(() => {
+      this.refreshManagedPlayerDisplayNames();
+    }, this.displayRefreshIntervalMs);
+  }
+
+  /**
+   * 停止周期性重挂 Tab 后缀
+   */
+  stopDisplayRefreshLoop() {
+    if (!this.displayRefreshInterval) {
+      return;
+    }
+
+    clearInterval(this.displayRefreshInterval);
+    this.displayRefreshInterval = null;
+  }
+
+  /**
+   * 重新为所有已管理玩家挂载当前应显示的 Tab 后缀
+   */
+  refreshManagedPlayerDisplayNames() {
+    if (this.managedPlayers.size === 0) {
+      this.stopDisplayRefreshLoop(); // 空列表时自动关闭循环
+      return;
+    }
+
+    for (const [playerName, data] of this.managedPlayers.entries()) {
+      if (!data?.uuid) continue;
+
+      const suffix = this._resolveDisplaySuffixForManagedPlayer(playerName, data);
+      if (!suffix) continue;
+
+      this._applyDisplayNameSuffix(data.uuid, suffix); // 先清再挂，强制刷新名字颜色状态
+    }
+  }
+
+  /**
+   * 根据当前轮播状态计算玩家应该显示的后缀内容
+   */
+  _resolveDisplaySuffixForManagedPlayer(playerName, data) {
+    if (this.showingGameStats) {
+      const gameStats = this._getGameStatsForEntry(playerName, data);
+      if (this._hasNonZeroEnabledGameStats(gameStats)) {
+        const gameStatsSuffix =
+          this.statsFormatter.formatGameStatsForTab(gameStats);
+        if (gameStatsSuffix) {
+          return gameStatsSuffix;
+        }
+      }
+    }
+
+    return this.cachedRegularStats.get(playerName) || "";
+  }
+
+  /**
+   * 通过先清理再设置的方式重建显示名，避免灰名状态残留
+   */
+  _applyDisplayNameSuffix(playerUuid, suffix) {
+    if (!playerUuid) {
+      return;
+    }
+
+    if (!suffix) {
+      this.api.clearDisplayNameSuffix(playerUuid); // 没有后缀时直接清理显示名后缀
+      return;
+    }
+
+    this.api.clearDisplayNameSuffix(playerUuid); // 先移除旧后缀，避免沿用死亡时的灰名缓存
+    this.api.setDisplayNameSuffix(playerUuid, suffix); // 重新挂载最新后缀，触发名字颜色重新计算
+  }
+
+  /**
+   * 为单个玩家查询战绩并挂载 Tab 后缀
+   */
   async addPlayerStatsToTab(originalPlayerName, resolvedPlayerName, attempt = 0) {
     const resolvedName = resolvedPlayerName || originalPlayerName;
     let playerUuid = null;
@@ -331,16 +426,16 @@ class TabManager {
 
       // Only set regular stats if not currently showing game stats
       if (!this.showingGameStats) {
-        this.api.setDisplayNameSuffix(player.uuid, statsSuffix);
+        this._applyDisplayNameSuffix(player.uuid, statsSuffix); // 首次渲染时也走重建逻辑，避免锁住旧名字颜色
       } else {
         const gameStats =
           this.bwu.inGameTracker.getPlayerStats(originalPlayerName) ||
           this.bwu.inGameTracker.getPlayerStats(finalNameForStats);
         if (this._hasNonZeroEnabledGameStats(gameStats)) {
           const gameStatsSuffix = this.statsFormatter.formatGameStatsForTab(gameStats);
-          this.api.setDisplayNameSuffix(player.uuid, gameStatsSuffix || statsSuffix);
+          this._applyDisplayNameSuffix(player.uuid, gameStatsSuffix || statsSuffix); // 对局后缀优先，同时强制刷新名字颜色
         } else {
-          this.api.setDisplayNameSuffix(player.uuid, statsSuffix);
+          this._applyDisplayNameSuffix(player.uuid, statsSuffix); // 无对局数据时回落常规后缀
         }
       }
 
@@ -349,6 +444,7 @@ class TabManager {
         uuid: playerUuid,
         resolvedName: finalNameForStats,
       });
+      this.startDisplayRefreshLoop(); // 开始周期性重刷，覆盖玩家死亡/复活后的颜色切换
     } catch (error) {
       console.error(
         `[BWU] Failed to add stats to tab for ${originalPlayerName}: ${error.stack}`
@@ -378,16 +474,16 @@ class TabManager {
 
         this.cachedRegularStats.set(originalPlayerName, fallbackSuffix);
         if (!this.showingGameStats) {
-          this.api.setDisplayNameSuffix(playerUuid, fallbackSuffix);
+          this._applyDisplayNameSuffix(playerUuid, fallbackSuffix); // 降级渲染时也保持颜色刷新逻辑一致
         } else {
           const gameStats =
             this.bwu.inGameTracker.getPlayerStats(originalPlayerName) ||
             this.bwu.inGameTracker.getPlayerStats(resolvedName);
           if (this._hasNonZeroEnabledGameStats(gameStats)) {
             const gameStatsSuffix = this.statsFormatter.formatGameStatsForTab(gameStats);
-            this.api.setDisplayNameSuffix(playerUuid, gameStatsSuffix || fallbackSuffix);
+            this._applyDisplayNameSuffix(playerUuid, gameStatsSuffix || fallbackSuffix); // 对局降级状态也统一走重建逻辑
           } else {
-            this.api.setDisplayNameSuffix(playerUuid, fallbackSuffix);
+            this._applyDisplayNameSuffix(playerUuid, fallbackSuffix); // 无对局数据时继续显示降级后缀
           }
         }
 
@@ -396,6 +492,7 @@ class TabManager {
           uuid: playerUuid,
           resolvedName: resolvedName,
         });
+        this.startDisplayRefreshLoop(); // 降级渲染成功后同样开启周期性刷新
       }
     }
   }
