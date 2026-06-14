@@ -18,59 +18,8 @@ module.exports = (api) => {
     
     for (const checkName in checkDefinitions) {
         const defaultCheckConfig = checkDefinitions[checkName];
-            
-        configSchema.push({
-            label: checkName,
-            defaults: { checks: { [checkName]: defaultCheckConfig } },
-            settings: [
-                {
-                    type: 'toggle',
-                    key: `checks.${checkName}.enabled`,
-                    text: ['OFF', 'ON'],
-                    description: defaultCheckConfig.description || `Enables or disables the ${checkName} check.`
-                },
-                {
-                    type: 'soundToggle',
-                    key: `checks.${checkName}.sound`,
-                    condition: (cfg) => cfg.checks[checkName].enabled,
-                    description: 'Toggles sound alerts for this check.'
-                },
-                {
-                    type: 'cycle',
-                    key: `checks.${checkName}.vl`,
-                    values: [
-                        { text: 'VL: 5', value: 5 },
-                        { text: 'VL: 10', value: 10 },
-                        { text: 'VL: 15', value: 15 },
-                        { text: 'VL: 20', value: 20 },
-                        { text: 'VL: 30', value: 30 }
-                    ],
-                    condition: (cfg) => cfg.checks[checkName].enabled,
-                    description: 'Sets the violation level to trigger an alert.'
-                },
-                {
-                    type: 'cycle',
-                    key: `checks.${checkName}.cooldown`,
-                    values: [
-                        { text: 'CD: 0s', value: 0 },
-                        { text: 'CD: 1s', value: 1000 },
-                        { text: 'CD: 2s', value: 2000 },
-                        { text: 'CD: 3s', value: 3000 }
-                    ],
-                    condition: (cfg) => cfg.checks[checkName].enabled,
-                    description: 'Sets the cooldown between alerts for this check.'
-                }
-            ]
-        });
-
-        if (typeof defaultCheckConfig.items === 'string') {
-            configSchema[configSchema.length - 1].settings.push({
-                type: 'text',
-                key: `checks.${checkName}.items`,
-                condition: (cfg) => cfg.checks[checkName].enabled,
-                description: 'Comma-separated item IDs to detect. Example: 49,373' // 配置要检测的物品 ID 列表
-            });
-        }
+        const sectionLabel = getCheckSectionLabel(checkName); // 为手持物品检测提供独立的三条配置标题
+        configSchema.push(createCheckSection(checkName, defaultCheckConfig, sectionLabel));
     }
 
     api.initializeConfig(configSchema);
@@ -88,6 +37,89 @@ module.exports = (api) => {
             api.debugLog('[AC] Anticheat plugin disabled');
         }
     };
+};
+
+/**
+ * 创建单个检测项的配置分组
+ */
+function createCheckSection(checkName, defaultCheckConfig, label = checkName) {
+    return {
+        label,
+        defaults: { checks: { [checkName]: defaultCheckConfig } },
+        settings: [
+            {
+                type: 'toggle',
+                key: `checks.${checkName}.enabled`,
+                text: ['OFF', 'ON'],
+                description: defaultCheckConfig.description || `Enables or disables the ${checkName} check.`
+            },
+            {
+                type: 'soundToggle',
+                key: `checks.${checkName}.sound`,
+                condition: (cfg) => cfg.checks[checkName].enabled,
+                description: 'Toggles sound alerts for this check.'
+            },
+            {
+                type: 'cycle',
+                key: `checks.${checkName}.vl`,
+                values: [
+                    { text: 'VL: 5', value: 5 },
+                    { text: 'VL: 10', value: 10 },
+                    { text: 'VL: 15', value: 15 },
+                    { text: 'VL: 20', value: 20 },
+                    { text: 'VL: 30', value: 30 }
+                ],
+                condition: (cfg) => cfg.checks[checkName].enabled,
+                description: 'Sets the violation level to trigger an alert.'
+            },
+            {
+                type: 'cycle',
+                key: `checks.${checkName}.cooldown`,
+                values: [
+                    { text: 'CD: 0s', value: 0 },
+                    { text: 'CD: 1s', value: 1000 },
+                    { text: 'CD: 2s', value: 2000 },
+                    { text: 'CD: 3s', value: 3000 }
+                ],
+                condition: (cfg) => cfg.checks[checkName].enabled,
+                description: 'Sets the cooldown between alerts for this check.'
+            }
+        ]
+    };
+}
+
+/**
+ * 返回检测项在 UI 中显示的标题
+ */
+function getCheckSectionLabel(checkName) {
+    if (checkName === 'AntiItemObsidian') return 'AntiItem - Obsidian';
+    if (checkName === 'AntiItemInvisibilityPotion') return 'AntiItem - Invis Pot';
+    if (checkName === 'AntiItemEnderPearl') return 'AntiItem - Pearl';
+    return checkName;
+}
+
+/**
+ * 创建单个手持物品检测项的默认配置
+ */
+function createAntiItemCheckConfig(description) {
+    return {
+        enabled: false, // 默认关闭单独的手持物品检测
+        sound: true, // 告警时默认播放提示音
+        vl: 5, // 默认达到一次切换就可触发告警阈值
+        cooldown: 2000, // 默认两秒内不重复提醒
+        description
+    };
+}
+
+const TEAM_COLOR_MAP = {
+    R: '§c',
+    B: '§9',
+    G: '§a',
+    Y: '§e',
+    A: '§b',
+    W: '§f',
+    P: '§d',
+    S: '§7'
 };
 
 
@@ -293,55 +325,46 @@ const CHECKS = {
         }
     },
 
-    AntiItem: {
-        config: {
-            enabled: false, sound: true, vl: 5, cooldown: 2000,
-            items: "49,373", // 默认检测黑曜石和药水
-            description: "Warns when a player switches to configured held items."
-        },
+    AntiItemObsidian: {
+        config: createAntiItemCheckConfig("Warns when a player switches to obsidian."),
 
         /**
-         * 检测玩家是否切换到了配置中的目标手持物品
+         * 检测玩家是否切换到黑曜石
          */
         check: function(player, config) {
-            const itemId = player.getItemId();
-            const targetItems = this.parseAntiItemConfig(config.items);
-            const detectionInfo = this.resolveAntiItemDetection(player, targetItems);
+            this.runAntiItemCheck(player, 'AntiItemObsidian', config, {
+                itemId: 49,
+                alertLabel: 'OB'
+            });
+        }
+    },
 
-            if (targetItems.size === 0) {
-                player.lastAntiItemDetected = false;
-                player.lastAntiItemId = null;
-                return;
-            }
+    AntiItemInvisibilityPotion: {
+        config: createAntiItemCheckConfig("Warns when a player switches to an invisibility potion."),
 
-            const isTrackedItem = detectionInfo !== null;
-            const switchedToTrackedItem =
-                isTrackedItem &&
-                (!player.lastAntiItemDetected || player.lastAntiItemId !== detectionInfo.itemId);
+        /**
+         * 检测玩家是否切换到隐身药水
+         */
+        check: function(player, config) {
+            this.runAntiItemCheck(player, 'AntiItemInvisibilityPotion', config, {
+                itemId: 373,
+                alertLabel: 'invs Pot',
+                matcher: (heldItem) => this.isInvisibilityPotion(heldItem) // 仅命中带隐身效果的药水
+            });
+        }
+    },
 
-            if (switchedToTrackedItem) {
-                player.lastAntiItemDetected = true;
-                player.lastAntiItemId = detectionInfo.itemId;
-                this.logAntiItemDetection(player, detectionInfo); // 调试模式下输出本次手持物品检测的详细信息
-                this.addViolation(player, 'AntiItem', config.vl || 1); // 单次切换事件应直接达到当前阈值，否则默认 VL 下不会告警
+    AntiItemEnderPearl: {
+        config: createAntiItemCheckConfig("Warns when a player switches to an ender pearl."),
 
-                if (this.shouldAlert(player, 'AntiItem', config)) {
-                    const customMessage = `Warn: ${this.getAlertDisplayName(player, false)} has ${detectionInfo.alertLabel}`;
-                    const plainText = `Warn: ${this.getAlertDisplayName(player, true)} has ${detectionInfo.alertLabel}`;
-                    this.flag(player, 'AntiItem', player.violations.AntiItem, {
-                        customMessage,
-                        plainText,
-                    });
-                    this.markAlert(player, 'AntiItem');
-                }
-                return;
-            }
-
-            if (!isTrackedItem) {
-                player.lastAntiItemDetected = false;
-                player.lastAntiItemId = null;
-                this.reduceViolation(player, 'AntiItem', player.violations.AntiItem); // 切离目标物品后重置违规值，避免累计污染下一次检测
-            }
+        /**
+         * 检测玩家是否切换到末影珍珠
+         */
+        check: function(player, config) {
+            this.runAntiItemCheck(player, 'AntiItemEnderPearl', config, {
+                itemId: 368,
+                alertLabel: 'Pearl'
+            });
         }
     },
     
@@ -485,8 +508,7 @@ class PlayerData {
         
         this.isBlocking = false;
         this.blockingStartTime = 0;
-        this.lastAntiItemDetected = false;
-        this.lastAntiItemId = null;
+        this.lastAntiItemStates = {}; // 记录每个手持物品检测项上一次是否处于命中状态
     }
     
     updatePosition(x, y, z, onGround, yaw = null, pitch = null) {
@@ -608,61 +630,83 @@ class AnticheatSystem {
         this.CONFIG = {};
         for (const checkName of Object.keys(CHECKS)) {
             this.CONFIG[checkName] = {
-                enabled: this.api.config.get(`checks.${checkName}.enabled`),
-                vl: this.api.config.get(`checks.${checkName}.vl`),
-                cooldown: this.api.config.get(`checks.${checkName}.cooldown`),
-                sound: this.api.config.get(`checks.${checkName}.sound`),
-                items: this.api.config.get(`checks.${checkName}.items`) // 仅 AntiItem 会实际使用该字段
+                enabled: this.api.config.get(`checks.${checkName}.enabled`) ?? CHECKS[checkName].config.enabled, // 读取配置时为空则回退到检测项默认开关
+                vl: this.api.config.get(`checks.${checkName}.vl`) ?? CHECKS[checkName].config.vl, // 读取配置时为空则回退到检测项默认阈值
+                cooldown: this.api.config.get(`checks.${checkName}.cooldown`) ?? CHECKS[checkName].config.cooldown, // 读取配置时为空则回退到检测项默认冷却
+                sound: this.api.config.get(`checks.${checkName}.sound`) ?? CHECKS[checkName].config.sound // 读取配置时为空则回退到检测项默认音效开关
             };
         }
     }
 
     /**
-     * 解析 AntiItem 的物品 ID 配置为可快速匹配的集合
+     * 获取检测项的实时配置，避免 UI 修改后仍使用旧缓存
      */
-    parseAntiItemConfig(itemsConfig) {
-        if (typeof itemsConfig !== 'string') {
-            return new Set();
-        }
-
-        const parsedIds = itemsConfig
-            .split(',')
-            .map((item) => Number.parseInt(item.trim(), 10))
-            .filter((itemId) => Number.isInteger(itemId));
-
-        return new Set(parsedIds);
+    getRuntimeCheckConfig(checkName) {
+        return {
+            enabled: this.api.config.get(`checks.${checkName}.enabled`) ?? CHECKS[checkName].config.enabled, // 实时读取启用状态
+            vl: this.api.config.get(`checks.${checkName}.vl`) ?? CHECKS[checkName].config.vl, // 实时读取告警阈值
+            cooldown: this.api.config.get(`checks.${checkName}.cooldown`) ?? CHECKS[checkName].config.cooldown, // 实时读取冷却配置
+            sound: this.api.config.get(`checks.${checkName}.sound`) ?? CHECKS[checkName].config.sound // 实时读取音效配置
+        };
     }
 
     /**
-     * 解析当前手持物品是否满足 AntiItem 的检测条件
+     * 执行单个手持物品检测项的公共逻辑
      */
-    resolveAntiItemDetection(player, targetItems) {
+    runAntiItemCheck(player, checkName, config, detectionRule) {
+        if (!config.enabled) {
+            player.lastAntiItemStates[checkName] = false; // 配置关闭后立即清理命中状态，避免重新开启时串状态
+            this.reduceViolation(player, checkName, player.violations[checkName]);
+            return;
+        }
+
+        const detectionInfo = this.resolveAntiItemDetection(player, detectionRule);
+        const isTrackedItem = detectionInfo !== null;
+        const wasTrackedItem = Boolean(player.lastAntiItemStates[checkName]);
+
+        if (isTrackedItem && !wasTrackedItem) {
+            player.lastAntiItemStates[checkName] = true; // 仅在切入目标物品时提醒一次
+            this.logAntiItemDetection(player, detectionInfo); // 调试模式下输出本次手持物品检测的详细信息
+            this.addViolation(player, checkName, config.vl || 1); // 单次切换事件应直接达到当前阈值，否则默认 VL 下不会告警
+
+            if (this.shouldAlert(player, checkName, config)) {
+                const customMessage = this.formatAntiItemAlert(player, detectionInfo);
+                const plainText = `Warn: ${this.getPlainTeamTag(player)} ${this.getAlertDisplayName(player, true)} has ${detectionInfo.alertLabel}`; // 点击粘贴到聊天栏时也保留队伍标识
+                this.flag(player, checkName, player.violations[checkName], {
+                    customMessage,
+                    plainText,
+                });
+                this.markAlert(player, checkName);
+            }
+            return;
+        }
+
+        if (!isTrackedItem) {
+            player.lastAntiItemStates[checkName] = false; // 切离目标物品后恢复可再次提醒状态
+            this.reduceViolation(player, checkName, player.violations[checkName]); // 切离目标物品后重置违规值，避免累计污染下一次检测
+        }
+    }
+
+    /**
+     * 解析当前手持物品是否满足单个 AntiItem 检测项的条件
+     */
+    resolveAntiItemDetection(player, detectionRule) {
         const itemId = player.getItemId();
-        if (itemId === null || !targetItems.has(itemId)) {
+        if (itemId === null) {
             return null;
         }
 
-        if (itemId === 373) {
-            if (!this.isInvisibilityPotion(player.heldItem)) {
-                return null; // 药水配置项仅命中隐身药水
-            }
-
-            return {
-                itemId,
-                alertLabel: 'invs Pot',
-            };
+        if (itemId !== detectionRule.itemId) {
+            return null;
         }
 
-        if (itemId === 49) {
-            return {
-                itemId,
-                alertLabel: 'OB',
-            };
+        if (typeof detectionRule.matcher === 'function' && !detectionRule.matcher(player.heldItem)) {
+            return null; // 允许某些物品继续追加细粒度判定，例如隐身药水 NBT 效果
         }
 
         return {
             itemId,
-            alertLabel: `Item ${itemId}`,
+            alertLabel: detectionRule.alertLabel,
         };
     }
 
@@ -681,14 +725,97 @@ class AnticheatSystem {
     }
 
     /**
-     * 获取告警中展示的玩家名，可选是否移除颜色代码
+     * 格式化 AntiItem 的彩色告警消息
      */
-    getAlertDisplayName(player, stripColors = false) {
-        const cleanName =
+    formatAntiItemAlert(player, detectionInfo) {
+        const teamInfo = this.getTeamDisplayInfo(player);
+        const itemColor = this.getAntiItemAlertColor(detectionInfo.alertLabel);
+
+        return `§6Warn§7: ${teamInfo.playerColor}[${teamInfo.letter}] ${teamInfo.playerColor}${teamInfo.playerName} §7has ${itemColor}${detectionInfo.alertLabel}`; // 冒号和 has 统一改为灰色
+    }
+
+    /**
+     * 为 AntiItem 告警提供队伍字母和玩家颜色
+     */
+    getTeamDisplayInfo(player) {
+        const cleanName = this.getCleanPlayerName(player);
+        const team = this.api.getPlayerTeam(cleanName);
+        const prefix = team?.prefix || '';
+        const letter = this.getTeamLetter(prefix) || 'W';
+        const playerColor =
+            TEAM_COLOR_MAP[letter] ||
+            this.extractLastColorCode(prefix) ||
+            this.extractLastColorCode(player.displayName) ||
+            '§f'; // 优先按队伍字母固定映射颜色，避免被后缀或重置码干扰
+
+        return {
+            letter,
+            playerColor,
+            playerName: cleanName,
+        };
+    }
+
+    /**
+     * 返回 AntiItem 告警里物品标签对应的颜色
+     */
+    getAntiItemAlertColor(alertLabel) {
+        if (alertLabel === 'OB') return '§5';
+        if (alertLabel === 'invs Pot') return '§d';
+        if (alertLabel === 'Pearl') return '§5';
+        return '§7';
+    }
+
+    /**
+     * 从带颜色代码的文本中提取最后一个颜色码作为玩家颜色
+     */
+    extractLastColorCode(text) {
+        const normalizedText = String(text || '').replace(/&/g, '§').replace(/搂/g, '§'); // 兼容项目内可能出现的其他颜色码形式
+        const matches = normalizedText.match(/§[0-9a-f]/gi);
+        if (!matches || matches.length === 0) {
+            return null;
+        }
+
+        return matches[matches.length - 1];
+    }
+
+    /**
+     * 按项目内现有实现从队伍前缀中提取队伍字母
+     */
+    getTeamLetter(rawPrefix) {
+        if (!rawPrefix) {
+            return null;
+        }
+
+        const normalizedPrefix = String(rawPrefix).replace(/&/g, '§').replace(/搂/g, '§');
+        const match = normalizedPrefix.match(/[A-Z]/);
+        return match ? match[0] : null;
+    }
+
+    /**
+     * 获取纯文本告警中使用的队伍标识前缀
+     */
+    getPlainTeamTag(player) {
+        const teamInfo = this.getTeamDisplayInfo(player);
+        return `[${teamInfo.letter}]`;
+    }
+
+    /**
+     * 获取玩家的净化后名称
+     */
+    getCleanPlayerName(player) {
+        return (
             player.username ||
             player.name ||
             this.stripColorCodes(player.displayName) ||
-            'Unknown';
+            'Unknown'
+        );
+    }
+
+    /**
+     * 获取告警中展示的玩家名，可选是否移除颜色代码
+     */
+    getAlertDisplayName(player, stripColors = false) {
+        const cleanName = this.getCleanPlayerName(player);
 
         const team = this.api.getPlayerTeam(cleanName);
         const prefix = team?.prefix || '';
@@ -724,8 +851,13 @@ class AnticheatSystem {
 
         this.unsubscribePluginRestored = this.api.on('plugin_restored', (event) => {
             if (event.pluginName === 'anticheat') {
+                this.refreshConfigConstants(); // 插件恢复时同步最新配置，避免 UI 修改后仍读取旧缓存
                 this.reset();
             }
+        });
+
+        this.unsubscribeConfigChanged = this.api.on('config_changed', () => {
+            this.refreshConfigConstants(); // 配置变更后刷新缓存，确保开关即时生效
         });
 
         
@@ -1076,7 +1208,7 @@ class AnticheatSystem {
     
     runChecks(player) {
         for (const checkName of Object.keys(CHECKS)) {
-            const checkConfig = this.CONFIG[checkName];
+            const checkConfig = this.getRuntimeCheckConfig(checkName);
             if (!checkConfig || !checkConfig.enabled) continue;
             
             const checkDefinition = CHECKS[checkName];
@@ -1099,7 +1231,7 @@ class AnticheatSystem {
 
         this.api.debugLog(`Flagging ${displayName} for ${checkName} (VL: ${vl})`);
 
-        const alertsEnabled = this.api.config.get(`checks.${checkName}.enabled`);
+        const alertsEnabled = this.getRuntimeCheckConfig(checkName).enabled;
         if (alertsEnabled) {
             const alertBody = options.customMessage || `${displayName} §7flagged §5${checkName} §8(§7VL: ${vl}§8)`;
             const plainAlertText = options.plainText || `${displayNameWithoutColor} flagged ${checkName} (VL: ${vl})`;
@@ -1127,7 +1259,7 @@ class AnticheatSystem {
             }
         }
         
-        const soundEnabled = this.api.config.get(`checks.${checkName}.sound`);
+        const soundEnabled = this.getRuntimeCheckConfig(checkName).sound;
         if (soundEnabled) {
             this.api.sound('note.pling');
         }
@@ -1139,6 +1271,9 @@ class AnticheatSystem {
         }
         if (this.unsubscribePluginRestored) {
             this.unsubscribePluginRestored();
+        }
+        if (this.unsubscribeConfigChanged) {
+            this.unsubscribeConfigChanged();
         }
         if (this.unsubscribeEntityMove) {
             this.unsubscribeEntityMove();
