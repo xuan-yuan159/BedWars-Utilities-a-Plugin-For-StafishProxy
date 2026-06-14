@@ -62,6 +62,15 @@ module.exports = (api) => {
                 }
             ]
         });
+
+        if (typeof defaultCheckConfig.items === 'string') {
+            configSchema[configSchema.length - 1].settings.push({
+                type: 'text',
+                key: `checks.${checkName}.items`,
+                condition: (cfg) => cfg.checks[checkName].enabled,
+                description: 'Comma-separated item IDs to detect. Example: 49,373' // 配置要检测的物品 ID 列表
+            });
+        }
     }
 
     api.initializeConfig(configSchema);
@@ -283,6 +292,58 @@ const CHECKS = {
             }
         }
     },
+
+    AntiItem: {
+        config: {
+            enabled: false, sound: true, vl: 5, cooldown: 2000,
+            items: "49,373", // 默认检测黑曜石和药水
+            description: "Warns when a player switches to configured held items."
+        },
+
+        /**
+         * 检测玩家是否切换到了配置中的目标手持物品
+         */
+        check: function(player, config) {
+            const itemId = player.getItemId();
+            const targetItems = this.parseAntiItemConfig(config.items);
+            const detectionInfo = this.resolveAntiItemDetection(player, targetItems);
+
+            if (targetItems.size === 0) {
+                player.lastAntiItemDetected = false;
+                player.lastAntiItemId = null;
+                return;
+            }
+
+            const isTrackedItem = detectionInfo !== null;
+            const switchedToTrackedItem =
+                isTrackedItem &&
+                (!player.lastAntiItemDetected || player.lastAntiItemId !== detectionInfo.itemId);
+
+            if (switchedToTrackedItem) {
+                player.lastAntiItemDetected = true;
+                player.lastAntiItemId = detectionInfo.itemId;
+                this.logAntiItemDetection(player, detectionInfo); // 调试模式下输出本次手持物品检测的详细信息
+                this.addViolation(player, 'AntiItem', config.vl || 1); // 单次切换事件应直接达到当前阈值，否则默认 VL 下不会告警
+
+                if (this.shouldAlert(player, 'AntiItem', config)) {
+                    const customMessage = `Warn: ${this.getAlertDisplayName(player, false)} has ${detectionInfo.alertLabel}`;
+                    const plainText = `Warn: ${this.getAlertDisplayName(player, true)} has ${detectionInfo.alertLabel}`;
+                    this.flag(player, 'AntiItem', player.violations.AntiItem, {
+                        customMessage,
+                        plainText,
+                    });
+                    this.markAlert(player, 'AntiItem');
+                }
+                return;
+            }
+
+            if (!isTrackedItem) {
+                player.lastAntiItemDetected = false;
+                player.lastAntiItemId = null;
+                this.reduceViolation(player, 'AntiItem', player.violations.AntiItem); // 切离目标物品后重置违规值，避免累计污染下一次检测
+            }
+        }
+    },
     
     
     TowerA: {
@@ -424,6 +485,8 @@ class PlayerData {
         
         this.isBlocking = false;
         this.blockingStartTime = 0;
+        this.lastAntiItemDetected = false;
+        this.lastAntiItemId = null;
     }
     
     updatePosition(x, y, z, onGround, yaw = null, pitch = null) {
@@ -548,9 +611,106 @@ class AnticheatSystem {
                 enabled: this.api.config.get(`checks.${checkName}.enabled`),
                 vl: this.api.config.get(`checks.${checkName}.vl`),
                 cooldown: this.api.config.get(`checks.${checkName}.cooldown`),
-                sound: this.api.config.get(`checks.${checkName}.sound`)
+                sound: this.api.config.get(`checks.${checkName}.sound`),
+                items: this.api.config.get(`checks.${checkName}.items`) // 仅 AntiItem 会实际使用该字段
             };
         }
+    }
+
+    /**
+     * 解析 AntiItem 的物品 ID 配置为可快速匹配的集合
+     */
+    parseAntiItemConfig(itemsConfig) {
+        if (typeof itemsConfig !== 'string') {
+            return new Set();
+        }
+
+        const parsedIds = itemsConfig
+            .split(',')
+            .map((item) => Number.parseInt(item.trim(), 10))
+            .filter((itemId) => Number.isInteger(itemId));
+
+        return new Set(parsedIds);
+    }
+
+    /**
+     * 解析当前手持物品是否满足 AntiItem 的检测条件
+     */
+    resolveAntiItemDetection(player, targetItems) {
+        const itemId = player.getItemId();
+        if (itemId === null || !targetItems.has(itemId)) {
+            return null;
+        }
+
+        if (itemId === 373) {
+            if (!this.isInvisibilityPotion(player.heldItem)) {
+                return null; // 药水配置项仅命中隐身药水
+            }
+
+            return {
+                itemId,
+                alertLabel: 'invs Pot',
+            };
+        }
+
+        if (itemId === 49) {
+            return {
+                itemId,
+                alertLabel: 'OB',
+            };
+        }
+
+        return {
+            itemId,
+            alertLabel: `Item ${itemId}`,
+        };
+    }
+
+    /**
+     * 判断当前药水物品是否包含隐身效果
+     */
+    isInvisibilityPotion(heldItem) {
+        const customPotionEffects =
+            heldItem?.nbtData?.value?.CustomPotionEffects?.value?.value;
+
+        if (!Array.isArray(customPotionEffects)) {
+            return false;
+        }
+
+        return customPotionEffects.some((effect) => effect?.Id?.value === 14);
+    }
+
+    /**
+     * 获取告警中展示的玩家名，可选是否移除颜色代码
+     */
+    getAlertDisplayName(player, stripColors = false) {
+        const cleanName =
+            player.username ||
+            player.name ||
+            this.stripColorCodes(player.displayName) ||
+            'Unknown';
+
+        const team = this.api.getPlayerTeam(cleanName);
+        const prefix = team?.prefix || '';
+        const suffix = team?.suffix || '';
+        const displayName = prefix + cleanName + suffix;
+
+        return stripColors ? this.stripColorCodes(displayName) : displayName;
+    }
+
+    /**
+     * 在调试模式下记录 AntiItem 命中时的详细上下文
+     */
+    logAntiItemDetection(player, detectionInfo) {
+        const detailPayload = {
+            timestamp: new Date().toISOString(),
+            playerName: this.getAlertDisplayName(player, true),
+            itemId: detectionInfo.itemId,
+            itemLabel: detectionInfo.alertLabel,
+            heldItem: player.heldItem,
+        };
+
+        this.api.debugLog(`[AntiItem DEBUG] ${JSON.stringify(detailPayload)}`);
     }
     
     registerHandlers() {
@@ -898,7 +1058,8 @@ class AnticheatSystem {
         if (!player) return;
         
         if (event.slot === 0) {
-            player.heldItem = event.item;
+            player.heldItem = event.item; // 记录当前手持物品，供 AntiItem 等检测使用
+            this.runChecks(player); // 切换手持物品时立即触发检测，避免必须等待移动事件
         }
     }
     
@@ -925,7 +1086,7 @@ class AnticheatSystem {
         }
     }
     
-    flag(player, checkName, vl) {
+    flag(player, checkName, vl, options = {}) {
         this.api.debugLog(`[FLAG DEBUG] Player object:`, { 
             username: player.username, 
             name: player.name, 
@@ -933,24 +1094,15 @@ class AnticheatSystem {
             uuid: player.uuid
         });
 
-        const cleanName =
-            player.username ||
-            player.name ||
-            this.stripColorCodes(player.displayName) ||
-            'Unknown';
-
-        const team = this.api.getPlayerTeam(cleanName);
-        const prefix = team?.prefix || '';
-        const suffix = team?.suffix || '';
-        const displayName = prefix + cleanName + suffix;
-        const displayNameWithoutColor = this.stripColorCodes(displayName);
+        const displayName = this.getAlertDisplayName(player, false);
+        const displayNameWithoutColor = this.getAlertDisplayName(player, true);
 
         this.api.debugLog(`Flagging ${displayName} for ${checkName} (VL: ${vl})`);
 
         const alertsEnabled = this.api.config.get(`checks.${checkName}.enabled`);
         if (alertsEnabled) {
-            const alertBody = `${displayName} §7flagged §5${checkName} §8(§7VL: ${vl}§8)`;
-            const plainAlertText = `${displayNameWithoutColor} flagged ${checkName} (VL: ${vl})`;
+            const alertBody = options.customMessage || `${displayName} §7flagged §5${checkName} §8(§7VL: ${vl}§8)`;
+            const plainAlertText = options.plainText || `${displayNameWithoutColor} flagged ${checkName} (VL: ${vl})`;
 
             try {
                 const messageComponent = {
