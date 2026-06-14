@@ -122,6 +122,8 @@ const TEAM_COLOR_MAP = {
     S: '§7'
 };
 
+const MAX_TRACKED_PLAYERS_FOR_CHECKS = 20;
+
 
 const CHECKS = {
     NoSlowA: {
@@ -671,7 +673,7 @@ class AnticheatSystem {
 
             if (this.shouldAlert(player, checkName, config)) {
                 const customMessage = this.formatAntiItemAlert(player, detectionInfo);
-                const plainText = `Warn: ${this.getPlainTeamTag(player)} ${this.getAlertDisplayName(player, true)} has ${detectionInfo.alertLabel}`; // 点击粘贴到聊天栏时也保留队伍标识
+                const plainText = `Warn: ${this.getPlainTeamTag(player)} ${this.getCleanPlayerName(player)} has ${detectionInfo.alertLabel}`; // 纯文本只保留一份队伍标识，避免和展示名前缀重复
                 this.flag(player, checkName, player.violations[checkName], {
                     customMessage,
                     plainText,
@@ -839,6 +841,61 @@ class AnticheatSystem {
 
         this.api.debugLog(`[AntiItem DEBUG] ${JSON.stringify(detailPayload)}`);
     }
+
+    /**
+     * 重置单个玩家所有检测项的运行时状态
+     */
+    resetPlayerCheckRuntimeState(player) {
+        for (const checkName of Object.keys(CHECKS)) {
+            player.violations[checkName] = 0; // 切图或跨局时清空所有 VL，避免旧局数据影响新局
+            player.lastAlerts[checkName] = 0;
+        }
+
+        player.noSlowData = null;
+        player.swingHistory = [];
+        player.lastSwingDetected = 0;
+        player.towerData = null;
+        player.lastAntiItemStates = {};
+        player.shiftEvents = [];
+        player.currentShiftStart = null;
+        player.lastCrouchTime = 0;
+        player.lastStopCrouchTime = 0;
+        player.lastUsing = false;
+        player.isBlocking = false;
+        player.blockingStartTime = 0;
+    }
+
+    /**
+     * 重置所有已追踪玩家的检测运行时状态
+     */
+    clearAllTrackedCheckState() {
+        for (const [, player] of this.playersByUuid) {
+            this.resetPlayerCheckRuntimeState(player);
+        }
+    }
+
+    /**
+     * 根据当前追踪到的玩家数量判断是否启用检测
+     */
+    shouldRunChecks() {
+        const activeTrackedPlayers = this.entityToPlayer.size; // 优先使用当前活动玩家实体数量，避免历史缓存人数卡死检测
+        const fallbackTrackedPlayers = this.playersByUuid.size;
+        const trackedPlayerCount =
+            activeTrackedPlayers > 0 ? activeTrackedPlayers : fallbackTrackedPlayers;
+
+        return trackedPlayerCount <= MAX_TRACKED_PLAYERS_FOR_CHECKS; // 当前活动人数小于等于 20 时启用检测
+    }
+
+    /**
+     * 返回所有手持物品检测项名称
+     */
+    getAntiItemCheckNames() {
+        return [
+            'AntiItemObsidian',
+            'AntiItemInvisibilityPotion',
+            'AntiItemEnderPearl'
+        ];
+    }
     
     registerHandlers() {
         this.unsubscribeTick = this.api.everyTick(() => {
@@ -860,7 +917,6 @@ class AnticheatSystem {
             this.refreshConfigConstants(); // 配置变更后刷新缓存，确保开关即时生效
         });
 
-        
         this.unsubscribeEntityMove = this.api.on('entity_move', (event) => {
             if (event.isPlayer && event.entity) {
                 this.handleEntityMove(event);
@@ -1191,7 +1247,7 @@ class AnticheatSystem {
         
         if (event.slot === 0) {
             player.heldItem = event.item; // 记录当前手持物品，供 AntiItem 等检测使用
-            this.runChecks(player); // 切换手持物品时立即触发检测，避免必须等待移动事件
+            this.runAntiItemChecks(player); // 切换手持物品时仅触发手持物品检测，避免顺带执行所有检测项
         }
     }
     
@@ -1207,10 +1263,37 @@ class AnticheatSystem {
     }
     
     runChecks(player) {
+        if (!this.shouldRunChecks()) {
+            return; // 当前追踪人数大于 20 时跳过所有检测
+        }
+
         for (const checkName of Object.keys(CHECKS)) {
             const checkConfig = this.getRuntimeCheckConfig(checkName);
             if (!checkConfig || !checkConfig.enabled) continue;
             
+            const checkDefinition = CHECKS[checkName];
+            if (checkDefinition && checkDefinition.check) {
+                checkDefinition.check.call(this, player, checkConfig);
+            }
+        }
+    }
+
+    /**
+     * 仅执行手持物品相关检测，避免装备切换事件触发整套检测逻辑
+     */
+    runAntiItemChecks(player) {
+        if (!this.shouldRunChecks()) {
+            return; // 当前追踪人数大于 20 时不执行手持物品检测
+        }
+
+        const antiItemCheckNames = this.getAntiItemCheckNames();
+
+        for (const checkName of antiItemCheckNames) {
+            const checkConfig = this.getRuntimeCheckConfig(checkName);
+            if (!checkConfig || !checkConfig.enabled) {
+                continue;
+            }
+
             const checkDefinition = CHECKS[checkName];
             if (checkDefinition && checkDefinition.check) {
                 checkDefinition.check.call(this, player, checkConfig);
