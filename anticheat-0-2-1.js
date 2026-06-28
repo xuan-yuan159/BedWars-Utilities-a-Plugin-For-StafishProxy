@@ -122,9 +122,6 @@ const TEAM_COLOR_MAP = {
     S: '§7'
 };
 
-const MAX_TRACKED_PLAYERS_FOR_CHECKS = 20;
-
-
 const CHECKS = {
     NoSlowA: {
         config: { 
@@ -641,18 +638,6 @@ class AnticheatSystem {
     }
 
     /**
-     * 获取检测项的实时配置，避免 UI 修改后仍使用旧缓存
-     */
-    getRuntimeCheckConfig(checkName) {
-        return {
-            enabled: this.api.config.get(`checks.${checkName}.enabled`) ?? CHECKS[checkName].config.enabled, // 实时读取启用状态
-            vl: this.api.config.get(`checks.${checkName}.vl`) ?? CHECKS[checkName].config.vl, // 实时读取告警阈值
-            cooldown: this.api.config.get(`checks.${checkName}.cooldown`) ?? CHECKS[checkName].config.cooldown, // 实时读取冷却配置
-            sound: this.api.config.get(`checks.${checkName}.sound`) ?? CHECKS[checkName].config.sound // 实时读取音效配置
-        };
-    }
-
-    /**
      * 执行单个手持物品检测项的公共逻辑
      */
     runAntiItemCheck(player, checkName, config, detectionRule) {
@@ -872,18 +857,6 @@ class AnticheatSystem {
         for (const [, player] of this.playersByUuid) {
             this.resetPlayerCheckRuntimeState(player);
         }
-    }
-
-    /**
-     * 根据当前追踪到的玩家数量判断是否启用检测
-     */
-    shouldRunChecks() {
-        const activeTrackedPlayers = this.entityToPlayer.size; // 优先使用当前活动玩家实体数量，避免历史缓存人数卡死检测
-        const fallbackTrackedPlayers = this.playersByUuid.size;
-        const trackedPlayerCount =
-            activeTrackedPlayers > 0 ? activeTrackedPlayers : fallbackTrackedPlayers;
-
-        return trackedPlayerCount <= MAX_TRACKED_PLAYERS_FOR_CHECKS; // 当前活动人数小于等于 20 时启用检测
     }
 
     /**
@@ -1262,13 +1235,12 @@ class AnticheatSystem {
         }
     }
     
+    /**
+     * 执行已启用的检测项，使用配置缓存避免高频事件反复读取配置
+     */
     runChecks(player) {
-        if (!this.shouldRunChecks()) {
-            return; // 当前追踪人数大于 20 时跳过所有检测
-        }
-
         for (const checkName of Object.keys(CHECKS)) {
-            const checkConfig = this.getRuntimeCheckConfig(checkName);
+            const checkConfig = this.CONFIG[checkName]; // 高频移动和状态事件只读取配置缓存
             if (!checkConfig || !checkConfig.enabled) continue;
             
             const checkDefinition = CHECKS[checkName];
@@ -1282,14 +1254,10 @@ class AnticheatSystem {
      * 仅执行手持物品相关检测，避免装备切换事件触发整套检测逻辑
      */
     runAntiItemChecks(player) {
-        if (!this.shouldRunChecks()) {
-            return; // 当前追踪人数大于 20 时不执行手持物品检测
-        }
-
         const antiItemCheckNames = this.getAntiItemCheckNames();
 
         for (const checkName of antiItemCheckNames) {
-            const checkConfig = this.getRuntimeCheckConfig(checkName);
+            const checkConfig = this.CONFIG[checkName]; // 装备切换事件同样复用配置缓存
             if (!checkConfig || !checkConfig.enabled) {
                 continue;
             }
@@ -1301,6 +1269,9 @@ class AnticheatSystem {
         }
     }
     
+    /**
+     * 发送检测告警并按配置播放提示音
+     */
     flag(player, checkName, vl, options = {}) {
         this.api.debugLog(`[FLAG DEBUG] Player object:`, { 
             username: player.username, 
@@ -1314,7 +1285,8 @@ class AnticheatSystem {
 
         this.api.debugLog(`Flagging ${displayName} for ${checkName} (VL: ${vl})`);
 
-        const alertsEnabled = this.getRuntimeCheckConfig(checkName).enabled;
+        const checkConfig = this.CONFIG[checkName] || CHECKS[checkName].config; // 告警阶段复用配置缓存，缺失时回退默认配置
+        const alertsEnabled = checkConfig.enabled; // 使用缓存开关决定是否发送聊天告警
         if (alertsEnabled) {
             const alertBody = options.customMessage || `${displayName} §7flagged §5${checkName} §8(§7VL: ${vl}§8)`;
             const plainAlertText = options.plainText || `${displayNameWithoutColor} flagged ${checkName} (VL: ${vl})`;
@@ -1342,7 +1314,7 @@ class AnticheatSystem {
             }
         }
         
-        const soundEnabled = this.getRuntimeCheckConfig(checkName).sound;
+        const soundEnabled = checkConfig.sound; // 使用缓存开关决定是否播放提示音
         if (soundEnabled) {
             this.api.sound('note.pling');
         }
