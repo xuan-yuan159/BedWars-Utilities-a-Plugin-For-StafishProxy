@@ -309,6 +309,9 @@ class CommandHandler {
     );
   }
 
+  /**
+   * 保存 NetherApi API Key
+   */
   handleSetKeyCommand(ctx) {
     const apikey = ctx.args.apikey;
 
@@ -335,12 +338,12 @@ class CommandHandler {
       return;
     }
 
-    this.api.config.set("main.hypixelApiKey", trimmedKey);
+    this.api.config.set("main.netherApiKey", trimmedKey); // 保存 NetherApi API Key
     this.api.chat(
       `${this.api.getPrefix()} §a${this._t(
-        "chat.command.api_key.hypixel_set",
+        "chat.command.api_key.nether_set",
         null,
-        "Hypixel API key set successfully!"
+        "NetherApi API key set successfully!"
       )}`
     );
   }

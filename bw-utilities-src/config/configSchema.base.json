@@ -1,10 +1,10 @@
 [
   {
-    "label": "API - Hypixel",
-    "description": "Set your Hypixel API key and cache duration. Use: /bwu setkey <key>",
+    "label": "API - NetherApi",
+    "description": "Set your NetherApi key and cache duration. Use: /bwu setkey <key>",
     "defaults": {
       "main": {
-        "hypixelApiKey": "YOUR_HYPIXEL_API_KEY_HERE"
+        "netherApiKey": "YOUR_NETHER_API_KEY_HERE"
       },
       "performance": {
         "cacheTTL": 300
@@ -12,9 +12,9 @@
     },
     "settings": [
       {
-        "key": "main.hypixelApiKey",
+        "key": "main.netherApiKey",
         "type": "text",
-        "description": "Hypixel API key. Get one at https://developer.hypixel.net/. Use: /bwu setkey <key>"
+        "description": "NetherApi API key. Use: /bwu setkey <key>"
       },
       {
         "key": "performance.cacheTTL",

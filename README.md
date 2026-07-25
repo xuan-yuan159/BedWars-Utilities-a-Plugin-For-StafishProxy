@@ -46,7 +46,7 @@
 进入游戏后执行：
 
 ```text
-/bwu setkey <Hypixel API Key>
+/bwu setkey <NetherApi API Key>
 /bwu setaurora <Aurora API Key>
 ```
 
@@ -79,7 +79,7 @@
   查看可用子命令列表。
 
 - `/bwu setkey <apikey>`  
-  设置 Hypixel API Key。
+  设置 NetherApi API Key。
 
 - `/bwu setaurora <apikey>`  
   设置 Aurora API Key。

@@ -269,9 +269,12 @@ class BedWarsUtilities {  constructor(api) {
     }
   }
 
+  /**
+   * 在首次加入服务器时检查 NetherApi API Key
+   */
   async _initialApiKeyCheck() {
     setTimeout(async () => {
-      const result = await this.apiService.testHypixelApiKey();
+      const result = await this.apiService.testNetherApiKey(); // 检查 NetherApi API Key
 
       const fadeIn = 10; // 10 ticks = 0.5s
       const stay = 40; // 40 ticks = 2.0s
@@ -284,7 +287,7 @@ class BedWarsUtilities {  constructor(api) {
           `§a${this._t(
             "chat.api_key.valid_title",
             null,
-            "Hypixel API key is functional!"
+            "NetherApi API key is functional!"
           )}`,
           fadeIn,
           stay,
@@ -296,7 +299,7 @@ class BedWarsUtilities {  constructor(api) {
           `§c${this._t(
             "chat.api_key.invalid_title",
             null,
-            "Hypixel API key is not functional! Please set a valid key"
+            "NetherApi API key is not functional! Please set a valid key"
           )}`,
           fadeIn,
           stay,

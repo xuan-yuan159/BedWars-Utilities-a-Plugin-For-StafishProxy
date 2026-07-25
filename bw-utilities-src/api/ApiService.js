@@ -1,3 +1,5 @@
+const NETHER_API_BASE_URL = "https://netherapi.com/api"; // NetherApi API 基础地址
+
 class ApiService {
   constructor(api, cacheManager) {
     this.api = api;
@@ -22,17 +24,20 @@ class ApiService {
     }
   }
 
-  async testHypixelApiKey() {
+  /**
+   * 测试 NetherApi API Key 是否有效
+   */
+  async testNetherApiKey() {
     try {
-      const apiKey = this.api.config.get("main.hypixelApiKey");
-      if (!apiKey || apiKey === "YOUR_HYPIXEL_API_KEY_HERE") {
+      const apiKey = this.api.config.get("main.netherApiKey"); // 读取 NetherApi API Key
+      if (!apiKey || apiKey === "YOUR_NETHER_API_KEY_HERE") {
         return { isValid: false, reason: "API key not set." };
       }
 
       const response = await this._fetchWithTimeout(
-        `https://api.hypixel.net/v2/counts`,
+        `${NETHER_API_BASE_URL}/v2/counts`, // 使用 NetherApi 的 Key 校验接口
         {
-          headers: { "API-Key": apiKey },
+          headers: { "API-Key": apiKey }, // 按 NetherApi 官方示例传递 API Key
         },
         3000
       );
@@ -45,8 +50,8 @@ class ApiService {
         return { isValid: false, reason: data.cause || "Invalid API key." };
       }
     } catch (error) {
-      console.error(`[BWU HYPIXEL API] API key test failed: ${error.message}`);
-      return { isValid: false, reason: "Failed to connect to Hypixel API." };
+      console.error(`[BWU NETHER API] API key test failed: ${error.message}`);
+      return { isValid: false, reason: "Failed to connect to NetherApi." };
     }
   }
 
@@ -145,20 +150,23 @@ class ApiService {
     return "§7";
   }
 
+  /**
+   * 通过 NetherApi 获取玩家 BedWars 战绩
+   */
   async getPlayerStats(playerName) {
     const cached = this.cache.getPlayerStats(playerName);
     if (cached) return cached;
 
     try {
-      const apiKey = this.api.config.get("main.hypixelApiKey");
-      if (!apiKey || apiKey === "YOUR_HYPIXEL_API_KEY_HERE") return null;
+      const apiKey = this.api.config.get("main.netherApiKey"); // 读取 NetherApi API Key
+      if (!apiKey || apiKey === "YOUR_NETHER_API_KEY_HERE") return null;
 
       const uuid = await this.getUuid(playerName);
       if (!uuid) return { isNicked: true };
 
       const response = await this._fetchWithTimeout(
-        `https://api.hypixel.net/v2/player?uuid=${uuid}`,
-        { headers: { "API-Key": apiKey } },
+        `${NETHER_API_BASE_URL}/v2/player?uuid=${uuid}`, // 请求 NetherApi 玩家数据
+        { headers: { "API-Key": apiKey } }, // 按官方示例传递 API Key
         3000
       );
 
@@ -196,7 +204,7 @@ class ApiService {
         ? "request timed out"
         : error.message;
       console.error(
-        `[BWU HYPIXEL API] Failed to fetch player stats for ${playerName}: ${reason}`
+        `[BWU NETHER API] Failed to fetch player stats for ${playerName}: ${reason}`
       );
       return null;
     }

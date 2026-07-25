@@ -84,9 +84,9 @@ class CommandRegistry {
 
       registry
         .command("setkey")
-        .description(t("command.setkey.description", "Set your Hypixel API key"))
+        .description(t("command.setkey.description", "Set your NetherApi API key"))
         .argument("<apikey>", {
-          description: t("command.setkey.arg_apikey", "Your Hypixel API key"),
+          description: t("command.setkey.arg_apikey", "Your NetherApi API key"),
         })
         .handler((ctx) => commandHandler.handleSetKeyCommand(ctx));
 
