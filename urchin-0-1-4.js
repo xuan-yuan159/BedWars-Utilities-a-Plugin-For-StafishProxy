@@ -3,6 +3,8 @@
 
 const https = require('https');
 
+const URCHIN_API_HOSTNAME = 'api.urchin.gg'; // 当前 Urchin API 的域名
+
 module.exports = (api) => {
     api.metadata({
         name: 'urchin',
@@ -32,7 +34,7 @@ module.exports = (api) => {
                 {
                     type: 'text',
                     key: 'api.apiKey',
-                    description: 'Your Urchin API key (optional - not required for tag checking).',
+                    description: 'Your Urchin API key (required for tag checking).', // 当前接口每次请求都需要 API key
                     placeholder: 'Enter your Urchin API key'
                 }
             ]
@@ -290,6 +292,9 @@ class UrchinPlugin {
         });
     }
     
+    /**
+     * 显示去昵称玩家的标签详情，并在理由为空时使用默认文本。
+     */
     displayDenickedTags(nickName, realName, tags) {
         const player = this.api.getPlayerByName(nickName);
         const team = player ? this.api.getPlayerTeam(player.name) : null;
@@ -308,9 +313,10 @@ class UrchinPlugin {
             const tagType = this.formatTagType(tag.type);
             const tagColor = this.getTagColor(tag.type);
             const tagIcon = this.getTagIcon(tag.type);
+            const reason = this.getTagReason(tag); // 标签理由为空时显示 unknown
             
             hoverText.push({ text: `§${tagColor}${tagType} [${tagIcon}]\n` });
-            hoverText.push({ text: `§9"${tag.reason}"\n` });
+            hoverText.push({ text: `§9"${reason}"\n` });
             hoverText.push({ text: `§7- Added ${timeAgo}\n` });
             
             if (index < tags.length - 1) {
@@ -327,7 +333,8 @@ class UrchinPlugin {
             const tagColor = this.getTagColor(tag.type);
             const timeAgo = this.getTimeAgo(tag.added_on);
             const tagType = this.formatTagType(tag.type);
-            const tagMessage = `⚠ ${nickName} (${realName}) 发现Tags："${tag.reason}" -- ${timeAgo}前添加，请不要作弊喵~`;
+            const reason = this.getTagReason(tag); // 标签理由为空时显示 unknown
+            const tagMessage = `⚠ ${nickName} (${realName}) 发现Tags："${reason}" -- ${timeAgo}前添加，请不要作弊喵~`;
 
             tagMessagesForAutoSend.push(tagMessage);
             
@@ -404,62 +411,32 @@ class UrchinPlugin {
         this.sendInfoMessage('You can now test it with /urchin testapi');
     }
 
-    handleTestApiCommand() {
+    /**
+     * 测试当前配置的 Urchin API key 是否可以访问当前 API。
+     */
+    async handleTestApiCommand() {
         const apiKey = this.api.config.get('api.apiKey');
-        
-        if (!apiKey) {
-            this.sendInfoMessage('Testing API connection without API key...');
-        } else {
-            this.sendInfoMessage('Testing API connection with API key...');
+        if (!apiKey || apiKey.trim() === '') {
+            this.sendErrorMessage('API key not configured. Set it in plugin config.');
+            return;
         }
-        
-        const path = apiKey 
-            ? `/player?key=${apiKey}&sources=MANUAL`
-            : `/player?sources=MANUAL`;
-        
-        const options = {
-            hostname: 'urchin.ws',
-            path: path,
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Content-Length': Buffer.byteLength('{"usernames":[]}')
+
+        this.sendInfoMessage('Testing API connection with API key...');
+
+        try {
+            const testResponse = await this.testApiConnection(); // 通过当前版本接口验证鉴权
+            if (testResponse.valid) {
+                this.sendSuccessMessage('API key is valid and working!');
+            } else {
+                this.sendErrorMessage(`API test failed with status ${testResponse.statusCode}`);
             }
-        };
-
-        const req = https.request(options, (res) => {
-            let data = '';
-            res.on('data', (chunk) => {
-                data += chunk;
-            });
-            res.on('end', () => {
-                if (res.statusCode === 200) {
-                    try {
-                        JSON.parse(data);
-                        if (apiKey) {
-                            this.sendSuccessMessage('API key is valid and working!');
-                        } else {
-                            this.sendSuccessMessage('API connection successful (no API key)!');
-                        }
-                    } catch (e) {
-                        if (data === "Invalid Key") {
-                            this.sendErrorMessage('Invalid API key - use "/urchin setkey <key>" to update it');
-                        } else {
-                            this.sendErrorMessage('API response parsing failed');
-                        }
-                    }
-                } else {
-                    this.sendErrorMessage(`API test failed with status ${res.statusCode}`);
-                }
-            });
-        });
-
-        req.on('error', (err) => {
-            this.sendErrorMessage(`API test failed: ${err.message}`);
-        });
-        
-        req.write('{"usernames":[]}');
-        req.end();
+        } catch (error) {
+            if (error.message === 'Invalid API Key') {
+                this.sendErrorMessage('Invalid API key - use "/urchin setkey <key>" to update it');
+            } else {
+                this.sendErrorMessage(`API test failed: ${error.message}`);
+            }
+        }
     }
 
     handleTagCommand(player, tagType, reason, isForce) {
@@ -556,54 +533,20 @@ class UrchinPlugin {
         }
     }
 
+    /**
+     * 使用新版批量查询接口验证 API key，并返回鉴权结果。
+     */
     async testApiConnection() {
-        const apiKey = this.api.config.get('api.apiKey');
-        
-        return new Promise((resolve, reject) => {
-            const path = apiKey 
-                ? `/player?key=${apiKey}&sources=MANUAL`
-                : `/player?sources=MANUAL`;
-                
-            const options = {
-                hostname: 'urchin.ws',
-                path: path,
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Content-Length': Buffer.byteLength('{"usernames":[]}')
-                }
-            };
+        const response = await this.requestUrchin('/v3/players', 'POST', { uuids: [] }); // 空批量请求只用于验证 key
 
-            const req = https.request(options, (res) => {
-                let data = '';
-                res.on('data', (chunk) => {
-                    data += chunk;
-                });
-                res.on('end', () => {
-                    if (res.statusCode === 200) {
-                        try {
-                            JSON.parse(data);
-                            resolve({ valid: true });
-                        } catch (e) {
-                            if (data === "Invalid Key") {
-                                reject(new Error("Invalid API Key"));
-                            } else {
-                                resolve({ valid: false });
-                            }
-                        }
-                    } else {
-                        resolve({ valid: false });
-                    }
-                });
-            });
+        if (response.statusCode === 401) {
+            throw new Error('Invalid API Key');
+        }
 
-            req.on('error', (err) => {
-                resolve({ valid: false });
-            });
-            
-            req.write('{"usernames":[]}');
-            req.end();
-        });
+        return {
+            valid: response.statusCode >= 200 && response.statusCode < 300,
+            statusCode: response.statusCode
+        };
     }
 
     processUsernames(usernames, skipIgnore = false) {
@@ -737,6 +680,9 @@ class UrchinPlugin {
         }
     }
 
+    /**
+     * 显示玩家标签详情，并在理由为空时使用默认文本。
+     */
     displayTagMessage(username, tags, infoOnly = false) {
         let teamFormattedName = username;
         if (!infoOnly) {
@@ -757,9 +703,10 @@ class UrchinPlugin {
             const tagType = this.formatTagType(tag.type);
             const tagColor = this.getTagColor(tag.type);
             const tagIcon = this.getTagIcon(tag.type);
+            const reason = this.getTagReason(tag); // 标签理由为空时显示 unknown
             
             hoverText.push({ text: `§${tagColor}${tagType} [${tagIcon}]\n` });
-            hoverText.push({ text: `§9"${tag.reason}"\n` });
+            hoverText.push({ text: `§9"${reason}"\n` });
             hoverText.push({ text: `§7- Added ${timeAgo}\n` });
             
             if (index < tags.length - 1) {
@@ -776,7 +723,8 @@ class UrchinPlugin {
             const tagColor = this.getTagColor(tag.type);
             const timeAgo = this.getTimeAgo(tag.added_on);
             const tagType = this.formatTagType(tag.type);
-            const tagMessage = `⚠ ${username} 发现Tags："${tag.reason}" -- ${timeAgo}前添加，请不要作弊喵~`;
+            const reason = this.getTagReason(tag); // 标签理由为空时显示 unknown
+            const tagMessage = `⚠ ${username} 发现Tags："${reason}" -- ${timeAgo}前添加，请不要作弊喵~`;
 
             tagMessagesForAutoSend.push(tagMessage);
             
@@ -816,26 +764,68 @@ class UrchinPlugin {
         this.queueTagMessagesForAutoSend(tagMessagesForAutoSend, infoOnly);
     }
 
+    /**
+     * 查询多个玩家的 Urchin 标签，并兼容插件原有的批量响应结构。
+     */
     async batchCheckUrchinTags(usernames) {
         const apiKey = this.api.config.get('api.apiKey');
-        const sources = 'MANUAL';
-        
+        if (!apiKey || apiKey.trim() === '') {
+            throw new Error('API key not configured');
+        }
+
+        const uniqueUsernames = [...new Set(usernames.filter(Boolean))]; // 避免同一玩家重复消耗请求额度
+        const results = await Promise.all(uniqueUsernames.map(async (username) => {
+            const path = `/v3/player/tags?player=${encodeURIComponent(username)}`; // v3 接口支持直接传入用户名
+            const response = await this.requestUrchin(path, 'GET'); // API key 通过 X-API-Key 请求头发送
+
+            if (response.statusCode === 401) {
+                throw new Error('Invalid API Key');
+            }
+
+            if (response.statusCode === 404) {
+                return [username, []];
+            }
+
+            if (response.statusCode < 200 || response.statusCode >= 300) {
+                const errorMessage = response.body?.error || `Urchin API error (${response.statusCode})`;
+                throw new Error(errorMessage);
+            }
+
+            const tags = Array.isArray(response.body?.tags)
+                ? response.body.tags.map(tag => ({
+                    ...tag,
+                    type: tag.tag_type || tag.type // 将 API v3 的 tag_type 转为插件内部字段
+                }))
+                : [];
+
+            return [username, tags];
+        }));
+
+        return { players: Object.fromEntries(results) }; // 保持现有显示和告警逻辑无需改动
+    }
+
+    /**
+     * 发送 Urchin API 请求并统一解析 JSON 响应。
+     */
+    requestUrchin(path, method = 'GET', body = null) {
+        const apiKey = this.api.config.get('api.apiKey');
+        const jsonBody = body === null ? null : JSON.stringify(body);
+
         return new Promise((resolve, reject) => {
-            const requestBody = { usernames: usernames };
-            const jsonBody = JSON.stringify(requestBody);
-            
-            const path = apiKey 
-                ? `/player?key=${apiKey}&sources=${sources}`
-                : `/player?sources=${sources}`;
-            
+            const headers = {
+                'X-API-Key': apiKey // 当前 API 要求使用 X-API-Key 请求头
+            };
+
+            if (jsonBody !== null) {
+                headers['Content-Type'] = 'application/json'; // JSON 请求体的类型
+                headers['Content-Length'] = Buffer.byteLength(jsonBody); // 设置请求体字节长度
+            }
+
             const options = {
-                hostname: 'urchin.ws',
+                hostname: URCHIN_API_HOSTNAME, // 使用当前 Urchin API 域名
                 path: path,
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Content-Length': Buffer.byteLength(jsonBody)
-                }
+                method: method,
+                headers: headers
             };
 
             const req = https.request(options, (res) => {
@@ -844,23 +834,29 @@ class UrchinPlugin {
                     data += chunk;
                 });
                 res.on('end', () => {
+                    let responseBody = null;
                     try {
-                        const response = JSON.parse(data);
-                        if (response === "Invalid Key") {
-                            throw new Error("Invalid API Key");
-                        }
-                        resolve(response);
-                    } catch (err) {
-                        reject(err);
+                        responseBody = data ? JSON.parse(data) : null;
+                    } catch (error) {
+                        reject(new Error(`Failed to parse Urchin API response: ${error.message}`));
+                        return;
                     }
+
+                    resolve({
+                        statusCode: res.statusCode,
+                        body: responseBody,
+                        raw: data
+                    });
                 });
             });
 
-            req.on('error', (err) => {
-                reject(err);
+            req.on('error', (error) => {
+                reject(new Error(`Urchin API request failed: ${error.message}`));
             });
-            
-            req.write(jsonBody);
+
+            if (jsonBody !== null) {
+                req.write(jsonBody); // 发送 JSON 请求体
+            }
             req.end();
         });
     }
@@ -1015,6 +1011,14 @@ class UrchinPlugin {
         return type.split('_')
             .map(word => word.charAt(0).toUpperCase() + word.slice(1))
             .join(' ');
+    }
+
+    /**
+     * 获取标签理由，空值或仅包含空格时返回 unknown。
+     */
+    getTagReason(tag) {
+        const reason = typeof tag?.reason === 'string' ? tag.reason.trim() : '';
+        return reason || 'unknown'; // 标签没有有效理由时使用默认文本
     }
 
     getTagIcon(type) {
