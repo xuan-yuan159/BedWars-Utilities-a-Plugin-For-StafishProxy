@@ -14,6 +14,7 @@ module.exports = (api) => {
     const anticheat = new AnticheatSystem(api);
     
     const configSchema = [];
+    configSchema.push(createAntiItemAutoReportSection()); // 注册手持物品自动队伍播报总开关
     const checkDefinitions = getCheckDefinitions();
     
     for (const checkName in checkDefinitions) {
@@ -96,6 +97,28 @@ function getCheckSectionLabel(checkName) {
     if (checkName === 'AntiItemInvisibilityPotion') return 'AntiItem - Invis Pot';
     if (checkName === 'AntiItemEnderPearl') return 'AntiItem - Pearl';
     return checkName;
+}
+
+/**
+ * 创建手持物品自动队伍播报的配置分组
+ */
+function createAntiItemAutoReportSection() {
+    return {
+        label: 'AntiItem Auto Report',
+        defaults: {
+            antiItemAutoReport: {
+                enabled: false // 默认关闭对局内自动队伍播报
+            }
+        },
+        settings: [
+            {
+                type: 'toggle',
+                key: 'antiItemAutoReport.enabled', // 手持物品自动队伍播报总开关
+                text: ['OFF', 'ON'],
+                description: 'Automatically send AntiItem alerts to party chat during BedWars matches.'
+            }
+        ]
+    };
 }
 
 /**
@@ -603,6 +626,9 @@ class PlayerData {
 }
 
 class AnticheatSystem {
+    /**
+     * 初始化反作弊检测、玩家追踪和对局播报状态
+     */
     constructor(api) {
         this.api = api;
         this.players = new Map();
@@ -611,17 +637,26 @@ class AnticheatSystem {
         this.uuidToName = new Map();
         this.uuidToDisplayName = new Map();
         this.userPosition = null;
+        this.gameStarted = false; // 记录当前是否处于 BedWars 对局内
+        this.lastCleanMessage = null; // 保存上一条去色聊天消息用于开局判定
+        this.myTeamName = null; // 保存自己的队伍名称用于队伍淘汰判定
 
         this.CONFIG = {};
         this.refreshConfigConstants();
     }
-    
+
+    /**
+     * 清理玩家、对局和聊天检测状态
+     */
     reset() {
         this.players.clear();
         this.playersByUuid.clear();
         this.entityToPlayer.clear();
         this.uuidToName.clear();
         this.uuidToDisplayName.clear();
+        this.gameStarted = false; // 切图或插件恢复后退出对局状态
+        this.lastCleanMessage = null; // 清空上一条聊天消息
+        this.myTeamName = null; // 清空上一局队伍信息
         this.api.debugLog('Cleared all tracked player data.');
     }
     
@@ -869,8 +904,156 @@ class AnticheatSystem {
             'AntiItemEnderPearl'
         ];
     }
-    
+
+    /**
+     * 判断当前消息是否为 BedWars 对局开始消息
+     */
+    isBedwarsStartMessage(currentCleanMessage, lastCleanMessage) {
+        const originalStartText = 'Protect your bed and destroy the enemy beds.'; // 普通 BedWars 开局提示
+        if (currentCleanMessage.trim() === originalStartText) {
+            return true;
+        }
+
+        const divider = // BedWars 消息使用的分隔线
+            '▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬';
+        const validTitles = [ // 支持的 BedWars 模式标题
+            'Bed Wars Lucky Blocks',
+            'Bed Wars Ultimate',
+            'Bed Wars Swappage',
+            'Bed Wars Duels',
+            'Bed Wars Rush',
+            'Bed Wars'
+        ];
+
+        return Boolean(
+            lastCleanMessage &&
+            lastCleanMessage.trim() === divider &&
+            validTitles.includes(currentCleanMessage.trim())
+        );
+    }
+
+    /**
+     * 判断当前消息是否为 BedWars 奖励结算结束消息
+     */
+    isBedwarsEndMessage(currentCleanMessage) {
+        const divider = // BedWars 消息使用的分隔线
+            '▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬';
+        const trimmedMessage = currentCleanMessage.trim(); // 统一去除消息首尾空白
+        const lines = trimmedMessage.split('\n');
+
+        return (
+            trimmedMessage.startsWith(divider) &&
+            lines.length > 1 &&
+            lines[1].trim() === 'Reward Summary'
+        );
+    }
+
+    /**
+     * 获取当前玩家所在的 BedWars 队伍名称
+     */
+    getMyTeamName() {
+        try {
+            const me = this.api.getCurrentPlayer();
+            if (!me?.uuid) return null;
+
+            const serverInfo = this.api.getPlayerInfo(me.uuid);
+            if (!serverInfo?.name) return null;
+
+            const team = this.api.getPlayerTeam(serverInfo.name);
+            const match = String(team?.prefix || '').match(/[A-Z]/);
+            const teamNames = {
+                R: 'Red',
+                B: 'Blue',
+                G: 'Green',
+                Y: 'Yellow',
+                A: 'Aqua',
+                W: 'White',
+                P: 'Pink',
+                S: 'Gray'
+            };
+
+            return match ? teamNames[match[0]] || null : null;
+        } catch (error) {
+            this.api.debugLog(`[AC] Failed to get current team: ${error.message}`);
+            return null;
+        }
+    }
+
+    /**
+     * 判断当前消息是否为自己队伍被淘汰的消息
+     */
+    isTeamEliminatedMessage(currentCleanMessage) {
+        if (!this.myTeamName) {
+            this.myTeamName = this.getMyTeamName();
+        }
+
+        if (!this.myTeamName) return false;
+
+        return (
+            currentCleanMessage.trim() ===
+            `TEAM ELIMINATED > ${this.myTeamName} Team has been eliminated!`
+        );
+    }
+
+    /**
+     * 处理聊天消息并维护对局开始与结束状态
+     */
+    handleChat(event) {
+        const cleanMessage = this.stripColorCodes(event?.message).trim();
+        if (!cleanMessage) return;
+
+        if (
+            !this.gameStarted &&
+            this.isBedwarsStartMessage(cleanMessage, this.lastCleanMessage)
+        ) {
+            this.gameStarted = true; // 开局后允许手持物品自动队伍播报
+            this.myTeamName = this.getMyTeamName(); // 尝试缓存自己的队伍名称
+            this.api.debugLog('[AC] BedWars game started.');
+        }
+
+        if (
+            this.gameStarted &&
+            (this.isBedwarsEndMessage(cleanMessage) ||
+                this.isTeamEliminatedMessage(cleanMessage))
+        ) {
+            this.gameStarted = false; // 结束消息到达后立即停止自动队伍播报
+            this.myTeamName = null; // 清理本局队伍信息
+            this.api.debugLog('[AC] BedWars game ended.');
+        }
+
+        this.lastCleanMessage = cleanMessage; // 保存去色消息用于下一条开局判定
+    }
+
+    /**
+     * 判断是否允许当前 AntiItem 告警自动发送到队伍聊天
+     */
+    shouldAutoSendAntiItemAlert(checkName, plainAlertText) {
+        return Boolean(
+            this.api.config.get('antiItemAutoReport.enabled') === true &&
+            this.gameStarted &&
+            this.getAntiItemCheckNames().includes(checkName) &&
+            plainAlertText
+        );
+    }
+
+    /**
+     * 使用现有纯文本告警内容自动发送队伍聊天消息
+     */
+    sendAntiItemAlertToParty(plainAlertText) {
+        const cleanAlertText = this.stripColorCodes(plainAlertText).trim();
+        if (!cleanAlertText) return;
+
+        this.api.sendChatToServer(`/pc ${cleanAlertText}`); // 自动发送到队伍聊天
+    }
+
+    /**
+     * 注册反作弊事件和对局聊天监听器
+     */
     registerHandlers() {
+        this.unsubscribeChat = this.api.on('chat', (event) => {
+            this.handleChat(event);
+        });
+
         this.unsubscribeTick = this.api.everyTick(() => {
             for (const [uuid, player] of this.playersByUuid) {
                 if (player.swingProgress > 0) {
@@ -1312,6 +1495,10 @@ class AnticheatSystem {
             } catch (_error) {
                 this.api.chat(`${this.api.getPrefix()} ${alertBody}`);
             }
+
+            if (this.shouldAutoSendAntiItemAlert(checkName, plainAlertText)) {
+                this.sendAntiItemAlertToParty(plainAlertText); // 复用原手动告警文本自动发送到队伍聊天
+            }
         }
         
         const soundEnabled = checkConfig.sound; // 使用缓存开关决定是否播放提示音
@@ -1320,7 +1507,13 @@ class AnticheatSystem {
         }
     }
     
+    /**
+     * 取消所有反作弊事件监听并清理运行时状态
+     */
     cleanup() {
+        if (this.unsubscribeChat) {
+            this.unsubscribeChat(); // 插件禁用时取消对局聊天监听
+        }
         if (this.unsubscribeTick) {
             this.unsubscribeTick();
         }
