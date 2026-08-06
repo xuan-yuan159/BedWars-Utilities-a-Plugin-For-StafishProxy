@@ -43,7 +43,10 @@ class CommandRegistry {
           optional: true,
         })
         .argument("positions", {
-          description: t("command.find.arg_positions", "Optional positions"),
+          description: t(
+            "command.find.arg_positions",
+            "Optional fixed recruitment info"
+          ),
           optional: true,
           type: "greedy",
         })
@@ -107,6 +110,15 @@ class CommandRegistry {
           description: t("command.setaurora.arg_apikey", "Your Aurora API key"),
         })
         .handler((ctx) => commandHandler.handleSetAuroraCommand(ctx));
+
+      // 注册 Urchin API Key 配置命令
+      registry
+        .command("seturchin")
+        .description(t("command.seturchin.description", "Set your Urchin API key"))
+        .argument("<apikey>", {
+          description: t("command.seturchin.arg_apikey", "Your Urchin API key"),
+        })
+        .handler((ctx) => commandHandler.handleSetUrchinCommand(ctx));
 
       registry
         .command("setqdmsg")

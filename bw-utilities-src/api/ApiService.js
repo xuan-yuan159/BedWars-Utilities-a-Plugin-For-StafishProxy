@@ -1,4 +1,5 @@
 const NETHER_API_BASE_URL = "https://netherapi.com/api"; // NetherApi API 基础地址
+const URCHIN_API_BASE_URL = "https://api.urchin.gg"; // Urchin API 基础地址
 
 class ApiService {
   constructor(api, cacheManager) {
@@ -205,6 +206,52 @@ class ApiService {
         : error.message;
       console.error(
         `[BWU NETHER API] Failed to fetch player stats for ${playerName}: ${reason}`
+      );
+      return null;
+    }
+  }
+
+  /**
+   * 通过 Urchin API 查询玩家标签，未配置 Key 或请求失败时静默返回空结果。
+   * @param {string} playerName 玩家名称
+   * @returns {Promise<Array<object> | null>} 标签列表；无法查询时返回 null
+   */
+  async getPlayerTags(playerName) {
+    const apiKey = this.api.config.get("main.urchinApiKey"); // 读取独立的 Urchin API Key
+    if (!apiKey || typeof apiKey !== "string" || apiKey.trim() === "") {
+      return null; // 未配置 Key 时不影响原有自动战绩流程
+    }
+
+    try {
+      const response = await this._fetchWithTimeout(
+        `${URCHIN_API_BASE_URL}/v3/player/tags?player=${encodeURIComponent(
+          playerName
+        )}`,
+        {
+          headers: { "X-API-Key": apiKey.trim() }, // 按 Urchin v3 接口要求传递鉴权头
+        },
+        3000
+      );
+
+      if (response.status === 404) {
+        return []; // 未找到玩家或标签时按无标签处理
+      }
+
+      if (!response.ok) {
+        console.error(
+          `[BWU URCHIN API] Failed to fetch tags for ${playerName}: HTTP ${response.status}`
+        );
+        return null;
+      }
+
+      const data = await response.json();
+      return Array.isArray(data?.tags) ? data.tags : [];
+    } catch (error) {
+      const reason = this._isTimeoutError(error)
+        ? "request timed out"
+        : error.message;
+      console.error(
+        `[BWU URCHIN API] Failed to fetch tags for ${playerName}: ${reason}`
       );
       return null;
     }

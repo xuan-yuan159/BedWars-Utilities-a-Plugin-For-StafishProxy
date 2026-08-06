@@ -1,4 +1,7 @@
 class PartyFinder {
+  /**
+   * 初始化队伍招募服务及固定附加信息。
+   */
   constructor(api, apiService) {
     this.api = api;
     this.apiService = apiService;
@@ -6,22 +9,10 @@ class PartyFinder {
       "aaa",
       "bbbb",
       "ccccc",
-      "dddddd",
-      "eeeeeee",
-      "ffffffff",
-      "ggggggggg",
-      "hhhhhhhhhh",
-      "iiiiiiiiiii",
-      "jjjjjjjjjjjj",
-      "sssssssssssss",
-      "llllllllllllll",
-      "mmmmmmmmmmmmmmm",
-      "nnnnnnnnnnnnnnnn",
-      "ooooooooooooooooo",
-      "pppppppppppppppppp",
-      "qqqqqqqqqqqqqqqqqqq",
-      "rrrrrrrrrrrrrrrrrrrr",
-      "(ﾉ◕ヮ◕)ﾉ*:･ﾟ✧(ﾉ◕ヮ◕)ﾉ*:･ﾟ✧",
+      "qweqwe",
+      "<3<3<3",
+      "Ciallo~~",
+      "(ﾉ◕ヮ◕)ﾉ*:･ﾟ✧",
     ];
     this.resetState();
   }
@@ -70,9 +61,10 @@ class PartyFinder {
       return;
     }
 
+    const fixedPosition = positions.join(" ").trim() || "any"; // 将所有附加信息合并为一条固定文本
     const initialVacancies = [];
     for (let i = 0; i < playersToFindNum; i++) {
-      initialVacancies.push(positions[i] || "any");
+      initialVacancies.push(fixedPosition);
     }
 
     this.state = {
@@ -101,7 +93,10 @@ class PartyFinder {
     this.api.chat(`${this.api.getPrefix()} §cParty finder stopped.`);
   }
 
-  async executeNextStep() {
+  /**
+   * 进入下一轮招募流程并直接开始发送招募消息。
+   */
+  executeNextStep() {
     if (!this.isActive) return;
 
     if (this.state.vacancies.length === 0) {
@@ -115,13 +110,6 @@ class PartyFinder {
     const me = this.api.getCurrentPlayer();
     if (!me?.uuid) return this.stop();
     this.state.myNick = this.api.getPlayerInfo(me.uuid)?.name || me.name;
-
-    if (this.state.foundPlayers.length === 0) {
-      this.api.sendChatToServer("/bedwars");
-      await this.sleep(1000);
-      this.api.sendChatToServer("/swaplobby 1");
-      await this.sleep(3000);
-    }
 
     this.state.isProcessing = false;
     this.startMessageLoop();

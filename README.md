@@ -132,7 +132,7 @@
   `playersToFind`：`1|2|3`，且必须小于 `mode`  
   `fkdrThreshold`：最低 FKDR  
   `starsThreshold`：最低 BedWars 星数  
-  `positions`：可选位置描述（如 `rush`、`def`），可写多个
+  `positions`：可选招募附加信息；多个参数会合并为空格分隔的一条固定信息（如 `rush def`）
 
 - `/bwu find stop`  
   停止自动招募。

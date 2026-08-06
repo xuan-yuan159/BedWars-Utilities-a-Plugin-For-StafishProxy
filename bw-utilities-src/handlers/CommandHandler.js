@@ -388,6 +388,45 @@ class CommandHandler {
     );
   }
 
+  /**
+   * 保存 Urchin API Key，供等待大厅的自动标签查询使用。
+   */
+  handleSetUrchinCommand(ctx) {
+    const apikey = ctx.args.apikey;
+
+    if (!apikey || typeof apikey !== "string") {
+      this.api.chat(
+        `${this.api.getPrefix()} §c${this._t(
+          "chat.command.api_key.invalid",
+          null,
+          "Error: Please provide a valid API key!"
+        )}`
+      );
+      return;
+    }
+
+    const trimmedKey = apikey.trim();
+    if (trimmedKey.length === 0) {
+      this.api.chat(
+        `${this.api.getPrefix()} §c${this._t(
+          "chat.command.api_key.empty",
+          null,
+          "Error: The key cannot be empty!"
+        )}`
+      );
+      return;
+    }
+
+    this.api.config.set("main.urchinApiKey", trimmedKey); // 保存 Urchin API Key
+    this.api.chat(
+      `${this.api.getPrefix()} §a${this._t(
+        "chat.command.api_key.urchin_set",
+        null,
+        "Urchin API key set successfully!"
+      )}`
+    );
+  }
+
   sendQdMessage(slot) {
     if (!slot || slot < 1 || slot > 5) {
       this.api.chat(

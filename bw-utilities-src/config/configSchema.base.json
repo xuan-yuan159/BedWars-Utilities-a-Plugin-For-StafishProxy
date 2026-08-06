@@ -322,7 +322,8 @@
     "description": "Automations for pre-game lobby analysis.",
     "defaults": {
       "autoStats": {
-        "enabled": true
+        "enabled": true,
+        "checkTags": false
       },
       "mentionStats": {
         "enabled": true
@@ -395,6 +396,21 @@
           {
             "text": "Send in Chat: Private",
             "value": "private"
+          }
+        ]
+      },
+      {
+        "key": "autoStats.checkTags",
+        "type": "cycle",
+        "description": "在成功获取赛前大厅发言玩家的战绩后，自动查询 Urchin 标签。",
+        "values": [
+          {
+            "text": "自动标签查询：关闭",
+            "value": false
+          },
+          {
+            "text": "自动标签查询：开启",
+            "value": true
           }
         ]
       }
@@ -1998,6 +2014,22 @@
             "value": true
           }
         ]
+      }
+    ]
+  },
+  {
+    "label": "API - Urchin Tags",
+    "description": "设置 Urchin API Key，用于查询玩家标签。",
+    "defaults": {
+      "main": {
+        "urchinApiKey": ""
+      }
+    },
+    "settings": [
+      {
+        "key": "main.urchinApiKey",
+        "type": "text",
+        "description": "Urchin API Key。用法：/bwu seturchin <key>"
       }
     ]
   }
