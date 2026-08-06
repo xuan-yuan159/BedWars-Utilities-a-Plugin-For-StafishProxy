@@ -95,6 +95,7 @@
   "command.delmacro.arg_name": "要删除的宏名称。",
   "command.delmacro.description": "删除一个宏。",
   "command.find.arg_fkdr_threshold": "最低 FKDR ",
+  "command.find.arg_stars_threshold": "最低 BedWars 星数",
   "command.find.arg_mode": "模式（2、3、4）或 'stop'",
   "command.find.arg_players_to_find": "需要招募的人数",
   "command.find.arg_positions": "可选位置",

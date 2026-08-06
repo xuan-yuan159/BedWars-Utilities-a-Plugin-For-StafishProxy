@@ -95,6 +95,7 @@
   "command.delmacro.arg_name": "The name of the macro to be removed.",
   "command.delmacro.description": "Removes a macro.",
   "command.find.arg_fkdr_threshold": "Minimum FKDR required",
+  "command.find.arg_stars_threshold": "Minimum BedWars stars required",
   "command.find.arg_mode": "Mode (2, 3, 4) or 'stop'",
   "command.find.arg_players_to_find": "Number of players to find",
   "command.find.arg_positions": "Optional positions",

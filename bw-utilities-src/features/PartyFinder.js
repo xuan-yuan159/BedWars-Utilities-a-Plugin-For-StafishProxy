@@ -32,6 +32,9 @@ class PartyFinder {
     clearTimeout(this.messageLoopTimeout);
   }
 
+  /**
+   * 启动自动组队招募并初始化筛选条件。
+   */
   start(args) {
     if (this.isActive) {
       this.api.chat(
@@ -40,15 +43,19 @@ class PartyFinder {
       return;
     }
 
-    const [mode, playersToFind, fkdrThreshold, ...positions] = args;
+    const [mode, playersToFind, fkdrThreshold, starsThreshold, ...positions] = args;
+    const fkdrThresholdNum = Number.parseFloat(fkdrThreshold);
+    const starsThresholdNum = Number(starsThreshold);
 
     if (
       !["2", "3", "4"].includes(mode) ||
       !["1", "2", "3"].includes(playersToFind) ||
-      Number.isNaN(Number.parseFloat(fkdrThreshold))
+      !Number.isFinite(fkdrThresholdNum) ||
+      !Number.isInteger(starsThresholdNum) ||
+      starsThresholdNum < 0
     ) {
       this.api.chat(
-        `${this.api.getPrefix()} §cInvalid arguments. Usage: /bwu find (mode) <2|3|4> (people) <1|2|3> <fkdr> <role1> <role2>...`
+        `${this.api.getPrefix()} §cInvalid arguments. Usage: /bwu find <mode> <people> <fkdr> <stars> <role1> <role2>...`
       );
       return;
     }
@@ -71,7 +78,8 @@ class PartyFinder {
     this.state = {
       mode: Number.parseInt(mode),
       playersToFind: playersToFindNum,
-      fkdrThreshold: Number.parseFloat(fkdrThreshold),
+      fkdrThreshold: fkdrThresholdNum,
+      starsThreshold: starsThresholdNum, // 保存最低 BedWars 星数阈值
       vacancies: initialVacancies,
       foundPlayers: [],
       myNick: null,
@@ -119,6 +127,9 @@ class PartyFinder {
     this.startMessageLoop();
   }
 
+  /**
+   * 按固定的十五秒间隔发送当前空缺位置的招募消息。
+   */
   startMessageLoop() {
     if (!this.isActive || this.state.isProcessing) return;
 
@@ -137,9 +148,7 @@ class PartyFinder {
     );
     this.api.sendChatToServer(message);
 
-    const isLastSuffix =
-      this.state.currentSuffixIndex === this.messageSuffixes.length - 1;
-    const nextDelay = isLastSuffix ? 15000 : 10000;
+    const nextDelay = 15000; // 统一设置为十五秒发送一次
 
     this.messageLoopTimeout = setTimeout(
       () => this.startMessageLoop(),
@@ -228,6 +237,9 @@ class PartyFinder {
     return false;
   }
 
+  /**
+   * 处理聊天中的昵称提及，并按 FKDR 与星数筛选候选人。
+   */
   async _handleMention(cleanMessage) {
     const chatRegex = /^(?:\[.*?\]\s*)*(\w{3,16})(?::| ») (.*)/;
     const match = cleanMessage.match(chatRegex);
@@ -252,19 +264,36 @@ class PartyFinder {
           `${this.api.getPrefix()} §aMention by ${senderName}. Checking stats...`
         );
         const stats = await this.apiService.getPlayerStats(senderName);
+        const hasValidStats =
+          stats &&
+          Number.isFinite(stats.fkdr) &&
+          Number.isFinite(stats.stars);
 
-        if (stats && stats.fkdr >= this.state.fkdrThreshold) {
+        if (
+          hasValidStats &&
+          stats.fkdr >= this.state.fkdrThreshold &&
+          stats.stars >= this.state.starsThreshold
+        ) {
           this.state.waitingForPlayer = senderName;
           this.api.chat(
             `${this.api.getPrefix()} §a${senderName} has ${stats.fkdr.toFixed(
               2
-            )} FKDR. Inviting...`
+            )} FKDR and ${stats.stars} stars. Inviting...`
           );
           this.api.sendChatToServer(`/p invite ${senderName}`);
         } else {
-          const reason = stats
-            ? `FKDR too low (${stats.fkdr.toFixed(2)})`
-            : "Stats not found";
+          const reasons = [];
+          if (!hasValidStats) {
+            reasons.push("Stats not found");
+          } else {
+            if (stats.fkdr < this.state.fkdrThreshold) {
+              reasons.push(`FKDR too low (${stats.fkdr.toFixed(2)})`);
+            }
+            if (stats.stars < this.state.starsThreshold) {
+              reasons.push(`Stars too low (${stats.stars})`);
+            }
+          }
+          const reason = reasons.join(", ");
           this.api.chat(
             `${this.api.getPrefix()} §cSkipping ${senderName}: ${reason}.`
           );

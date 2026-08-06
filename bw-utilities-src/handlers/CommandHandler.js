@@ -236,6 +236,9 @@ class CommandHandler {
     }
   }
 
+  /**
+   * 将 find 命令参数转交给 PartyFinder。
+   */
   handleFindCommand(ctx) {
     if (ctx.args.mode && ctx.args.mode.toLowerCase() === "stop") {
       this.partyFinder.stop();
@@ -245,9 +248,10 @@ class CommandHandler {
     const mode = ctx.args.mode;
     const playersToFind = ctx.args.playersToFind;
     const fkdrThreshold = ctx.args.fkdrThreshold;
+    const starsThreshold = ctx.args.starsThreshold;
     const positions = ctx.args.positions || [];
 
-    const args = [mode, playersToFind, fkdrThreshold, ...positions];
+    const args = [mode, playersToFind, fkdrThreshold, starsThreshold, ...positions]; // 传递 FKDR 与最低星数阈值
 
     this.partyFinder.start(args);
   }

@@ -126,11 +126,12 @@
 
 ### 组队招募（Find）
 
-- `/bwu find <mode> <playersToFind> <fkdrThreshold> [positions...]`  
+- `/bwu find <mode> <playersToFind> <fkdrThreshold> <starsThreshold> [positions...]`  
   自动招募队友。  
   `mode`：`2|3|4`  
   `playersToFind`：`1|2|3`，且必须小于 `mode`  
   `fkdrThreshold`：最低 FKDR  
+  `starsThreshold`：最低 BedWars 星数  
   `positions`：可选位置描述（如 `rush`、`def`），可写多个
 
 - `/bwu find stop`  

@@ -1,4 +1,7 @@
 class CommandRegistry {
+  /**
+   * 注册 BWU 命令及其参数。
+   */
   static register(api, commandHandler) {
     const t = (key, fallback) =>
       typeof api.t === "function" ? api.t(key, null, fallback) : fallback;
@@ -29,6 +32,13 @@ class CommandRegistry {
           description: t(
             "command.find.arg_fkdr_threshold",
             "Minimum FKDR required"
+          ),
+          optional: true,
+        })
+        .argument("[starsThreshold]", { // 新增最低星数参数，保留 stop 命令的可用性
+          description: t(
+            "command.find.arg_stars_threshold",
+            "Minimum BedWars stars required"
           ),
           optional: true,
         })
