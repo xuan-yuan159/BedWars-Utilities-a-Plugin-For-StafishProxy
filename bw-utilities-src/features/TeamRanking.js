@@ -235,6 +235,9 @@ class TeamRanking {
     return Number(value).toFixed(2).replace(/\.?0+$/, "");
   }
 
+  /**
+   * 生成满足星数或 FKDR 阈值玩家的固定简略战绩。
+   */
   _getTeamHighlightDetails(team) {
     const highlightedPlayers = (team.players || [])
       .filter(
@@ -256,23 +259,13 @@ class TeamRanking {
         return `${player.name}-nicked`;
       }
 
-      const hasQualifiedFkdr = player.fkdr >= 1;
-      const hasQualifiedStars = player.stars >= 200;
       const formattedFkdr = this._formatCompactFkdr(player.fkdr);
       const roundedStars = Math.round(player.stars);
 
-      if (hasQualifiedFkdr && hasQualifiedStars) {
-        return `${player.name}-${roundedStars}✫-${formattedFkdr}`;
-      }
-
-      if (hasQualifiedStars) {
-        return `${player.name}-${roundedStars}✫`;
-      }
-
-      return `${player.name}-${formattedFkdr}`;
+      return `${roundedStars}✫${player.name}-${formattedFkdr}`; // 命中任一阈值时按星数、玩家名和 FKDR 固定发送
     });
 
-    return ` [ ${detailParts.join(", ")} ]`;
+    return `[${detailParts.join("；")}]`; // 多名玩家使用全角分号连续分隔
   }
 
   async displayRanking(teamsData, isSolosMode, rankingSent) {
