@@ -1,3 +1,6 @@
+const MAX_STATS_RETRIES = 3; // 玩家战绩查询失败后的最大额外重试次数
+const STATS_RETRY_DELAY = 300; // 两次战绩查询之间的等待时间，降低瞬时请求失败概率
+
 class PartyFinder {
   /**
    * 初始化队伍招募服务及固定附加信息。
@@ -193,6 +196,51 @@ class PartyFinder {
     return false;
   }
 
+  /**
+   * 查询候选玩家战绩，失败后最多额外重试三次。
+   */
+  async getPlayerStatsWithRetry(playerName, currentState) {
+    for (let retryCount = 0; retryCount <= MAX_STATS_RETRIES; retryCount++) {
+      if (!this.isActive || this.state !== currentState) {
+        return null; // 自动查找已停止或状态已切换时取消剩余查询
+      }
+
+      let stats = null;
+      try {
+        stats = await this.apiService.getPlayerStats(playerName);
+      } catch (error) {
+        this.api.debugLog(
+          `[BWU] Failed to fetch stats for ${playerName}: ${error.message}`
+        );
+      }
+
+      if (stats?.isNicked) {
+        return stats; // 已明确判定为 Nick 时无需重复请求
+      }
+
+      const hasValidStats =
+        stats &&
+        Number.isFinite(stats.fkdr) &&
+        Number.isFinite(stats.stars);
+
+      if (hasValidStats) {
+        return stats;
+      }
+
+      if (retryCount < MAX_STATS_RETRIES) {
+        this.api.debugLog(
+          `[BWU] Retrying stats for ${playerName} (${retryCount + 1}/${MAX_STATS_RETRIES})`
+        );
+        await this.sleep(STATS_RETRY_DELAY);
+      }
+    }
+
+    this.api.debugLog(
+      `[BWU] Stats lookup failed after ${MAX_STATS_RETRIES} retries: ${playerName}`
+    );
+    return null;
+  }
+
   _handleInviteResponse(cleanMessage) {
     const waitingFor = this.state.waitingForPlayer;
     const joinRegex = new RegExp(
@@ -247,11 +295,18 @@ class PartyFinder {
       ) {
         this.state.isProcessing = true;
         clearTimeout(this.messageLoopTimeout);
+        const currentState = this.state; // 固定本次候选处理对应的查找状态
 
         this.api.chat(
           `${this.api.getPrefix()} §aMention by ${senderName}. Checking stats...`
         );
-        const stats = await this.apiService.getPlayerStats(senderName);
+        const stats = await this.getPlayerStatsWithRetry(
+          senderName,
+          currentState
+        );
+        if (!this.isActive || this.state !== currentState) {
+          return; // 停止或切换查找后不再处理旧查询结果
+        }
         const hasValidStats =
           stats &&
           Number.isFinite(stats.fkdr) &&
